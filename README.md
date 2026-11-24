@@ -1,5 +1,5 @@
+SC MONITOR - VERSÃO 5.0
 ========================================================================
-                      SC MONITOR - VERSÃO 5.0
 
        Painel Local de Audiência, Chat, Gorjetas, Metas e Moderação
 

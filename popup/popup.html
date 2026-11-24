@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Stripchat Monitor</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+
+<body>
+  <header>
+    <b>Stripchat Monitor</b>
+    <span id="status">Aguardando página…</span>
+  </header>
+  <main>
+    <div class="grid">
+      <section><small>Espectadores agora</small><strong id="viewers">—</strong></section>
+      <section><small>Pico nesta sessão</small><strong id="peak">—</strong></section>
+      <section><small>Usuários listados</small><strong id="users">0</strong></section>
+      <section><small>Outros (sem tokens)</small><strong id="others">0</strong></section>
+      <section><small>Com Tokens</small><strong id="tokens-users">0</strong></section>
+      <section><small>Ultimate</small><strong id="ultimate-users">0</strong></section>
+      <section><small>Ocultos / Invisíveis</small><strong id="invisible-users">0</strong></section>
+      <section><small>Mais sem tokens (+)</small><strong id="more-users">0</strong></section>
+      <section style="grid-column: span 2;"><small>Tokens (gorjetas + shows estimados)</small><strong id="tokens">0 tk</strong>
+      </section>
+    </div>
+    <p id="room" class="muted">Abra uma sala do Stripchat para iniciar.</p>
+
+    <div class="actions">
+      <button id="start">Começar a monitorar</button>
+      <button id="save">Guardar dados</button>
+      <button id="export">Exportar CSV</button>
+      <button id="reset" class="secondary">Limpar dados</button>
+      <button id="open" class="secondary">Abrir painel na página</button>
+      <button id="reports" class="secondary">Ver relatórios</button>
+    </div>
+
+    <h4 style="margin:14px 0 6px 0; color:#fa5365; font-size:12px;">Salas Anteriores Monitoradas</h4>
+    <div id="history-container"
+      style="max-height:120px; overflow-y:auto; border:1px solid #374151; border-radius:7px; padding:6px; display:flex; flex-direction:column; gap:6px;">
+      <div class="muted" style="text-align:center; padding:6px;">Nenhuma sala anterior salva.</div>
+    </div>
+
+    <p class="note" style="margin-top:12px;">Os dados são separados por modelo e armazenados localmente no navegador.
+    </p>
+    <span class="language-control" aria-label="Idioma: Pt-BR">Idioma: Pt-BR</span>
+  </main>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

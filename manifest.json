@@ -1,0 +1,63 @@
+{
+  "manifest_version": 3,
+  "name": "SC Monitor",
+  "version": "5.0",
+  "description": "Painel local de audiência, chat, gorjetas, metas, shows e moderação para salas do Stripchat.",
+  "permissions": [
+    "storage",
+    "unlimitedStorage",
+    "tabs",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://stripchat.com/*",
+    "https://*.stripchat.com/*",
+    "https://stripchat.global/*",
+    "https://*.stripchat.global/*",
+    "https://static-proxy.strpst.com/*"
+  ],
+  "action": {
+    "default_title": "Abrir Stripchat Monitor",
+    "default_popup": "popup/popup.html"
+  },
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://stripchat.com/*",
+        "https://*.stripchat.com/*",
+        "https://stripchat.global/*",
+        "https://*.stripchat.global/*"
+      ],
+      "js": [
+        "src/content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "src/core/*.js",
+        "src/modules/*.js",
+        "src/ui/*.js",
+        "src/ui/dashboard/*.js",
+        "src/ui/export/*.js",
+        "src/ui/history/*.js",
+        "src/ui/moderation/*.js",
+        "src/ui/todos/*.js",
+        "src/ui/users/*.js",
+        "src/utils/*.js"
+      ],
+      "matches": [
+        "https://stripchat.com/*",
+        "https://*.stripchat.com/*",
+        "https://stripchat.global/*",
+        "https://*.stripchat.global/*"
+      ]
+    }
+  ]
+}

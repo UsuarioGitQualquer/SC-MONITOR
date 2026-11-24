@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Relatórios — SC Monitor</title>
+  <link rel="stylesheet" href="reports.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside id="report-sidebar" class="sidebar" aria-label="Navegação dos relatórios">
+      <a class="sidebar-brand" href="#report-workspace">
+        <span class="sidebar-mark" aria-hidden="true">SC</span>
+        <span>
+          <strong>SC Monitor</strong>
+          <small>Central de relatórios</small>
+        </span>
+      </a>
+      <p class="sidebar-section-label">PAINEL</p>
+      <nav class="sidebar-nav" aria-label="Seções">
+        <a class="is-active" href="#report-workspace">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="5" rx="1.5"></rect><rect x="14" y="12" width="7" height="9" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect></svg>
+          <span>Visão geral</span>
+        </a>
+        <a href="#report-filters">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M7 12h10m-7 6h4"></path><circle cx="8" cy="6" r="1.5"></circle><circle cx="15" cy="12" r="1.5"></circle><circle cx="11" cy="18" r="1.5"></circle></svg>
+          <span>Filtros e exportação</span>
+        </a>
+        <a href="#backup-tools">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5"></path><path d="M5 16v4h14v-4"></path></svg>
+          <span>Backup</span>
+        </a>
+        <a href="#danger-tools">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6m4-6v6M6 7l1 14h10l1-14M9 7V4h6v3"></path></svg>
+          <span>Gerenciar dados</span>
+        </a>
+      </nav>
+      <div class="sidebar-footer">
+        <span class="local-status-dot" aria-hidden="true"></span>
+        <span><strong>Uso do armazenamento local</strong><small id="local-storage-summary">Consultando armazenamento…</small></span>
+      </div>
+    </aside>
+
+    <div class="page-content">
+      <header class="page-header">
+        <div class="page-header-leading">
+          <button
+            id="toggle-sidebar"
+            class="sidebar-toggle"
+            type="button"
+            aria-label="Fechar menu lateral"
+            aria-controls="report-sidebar"
+            aria-expanded="true"
+            title="Fechar menu lateral"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"></path></svg>
+          </button>
+          <div class="page-header-copy">
+            <p class="eyebrow">SC MONITOR <span>·</span> ANÁLISES</p>
+            <h1>Relatórios</h1>
+            <p class="subtitle">Consulte e compare os dados locais das salas monitoradas.</p>
+          </div>
+        </div>
+        <div class="page-header-actions">
+          <label class="language-control" for="scm-language">Idioma
+            <select id="scm-language" aria-label="Idioma">
+              <option value="pt-BR">Português-BR</option>
+              <option value="es">Español</option>
+              <option value="en">English</option>
+            </select>
+          </label>
+          <button id="refresh-report" type="button" class="secondary">Atualizar</button>
+        </div>
+      </header>
+
+      <main>
+    <section id="report-filters" class="filters" aria-label="Filtros do relatório">
+      <label class="filter-primary">
+        Tipo de relatório
+        <select id="report-mode">
+          <option value="day">Dia</option>
+          <option value="session">Sessão</option>
+          <option value="period">Período</option>
+        </select>
+      </label>
+      <label class="filter-primary">
+        Modelo / sala
+        <select id="report-model"></select>
+      </label>
+      <div id="day-controls" class="day-controls">
+        <label>
+          Data principal
+          <select id="report-date-a"></select>
+        </label>
+        <div id="date-comparison-control">
+          <label>
+            Comparar com
+            <select id="report-date-b"></select>
+          </label>
+        </div>
+        <label>
+          Live do dia (A)
+          <select id="report-session-a"></select>
+        </label>
+        <label>
+          Comparar esta live com (B)
+          <select id="report-session-b"></select>
+        </label>
+      </div>
+      <div id="period-controls" class="filter-group" hidden>
+        <label>
+          De
+          <input id="period-start" type="date">
+        </label>
+        <label>
+          Até
+          <input id="period-end" type="date">
+        </label>
+        <label>
+          Agrupar por
+          <select id="period-granularity">
+            <option value="day">Dia</option>
+            <option value="week">Semana</option>
+            <option value="month">Mês</option>
+          </select>
+        </label>
+      </div>
+      <button id="export-report" type="button" class="primary">Exportar CSV</button>
+    </section>
+
+    <section id="period-comparison-control" class="period-comparison-control" hidden aria-label="Comparação entre períodos">
+      <label class="period-comparison-toggle">
+        <input id="compare-periods" type="checkbox">
+        Comparar com outro período
+      </label>
+      <div id="period-comparison-dates" class="period-comparison-dates" hidden>
+        <label>
+          Período B · De
+          <input id="period-comparison-start" type="date">
+        </label>
+        <label>
+          Período B · Até
+          <input id="period-comparison-end" type="date">
+        </label>
+      </div>
+    </section>
+
+    <p id="report-status" class="status" role="status" aria-live="polite"></p>
+    <div id="day-time-control" class="report-time-control">
+      <label for="report-time-granularity">Bloco de tempo dos gráficos diários</label>
+      <select id="report-time-granularity">
+        <option value="auto">Automático</option>
+        <option value="1">1 min</option>
+        <option value="2">2 min</option>
+        <option value="5">5 min</option>
+        <option value="10">10 min</option>
+        <option value="20">20 min</option>
+        <option value="30">30 min</option>
+        <option value="60">1 hora</option>
+      </select>
+    </div>
+    <section id="report-workspace" aria-live="polite"></section>
+
+    <section class="report-tools" aria-label="Ferramentas de dados">
+      <div class="report-tools-heading">
+        <p class="eyebrow">GERENCIAMENTO</p>
+        <h2>Ferramentas de dados</h2>
+        <p>Faça backup ou gerencie o histórico armazenado localmente.</p>
+      </div>
+      <section id="backup-tools" class="backup-tools" aria-label="Backup dos dados">
+        <div class="backup-heading">
+          <h2>Backup dos dados</h2>
+          <p>Exporte todos os dados ou apenas o modelo selecionado. A restauração seletiva preserva os demais modelos.</p>
+        </div>
+        <div class="backup-section">
+          <h3>Exportar</h3>
+          <div class="backup-actions">
+            <label>
+              Escopo
+              <select id="backup-export-scope">
+                <option value="all">Todos os dados</option>
+                <option value="model">Modelo selecionado acima</option>
+              </select>
+            </label>
+            <button id="export-backup" type="button" class="secondary">Exportar backup JSON</button>
+          </div>
+        </div>
+        <div class="backup-section">
+          <h3>Importar</h3>
+          <div class="backup-actions">
+            <button id="import-backup" type="button" class="secondary">Selecionar arquivo JSON</button>
+            <input id="backup-file" type="file" accept=".json,application/json" hidden>
+          </div>
+          <div id="backup-import-options" class="backup-import-options" hidden>
+            <label>
+              Restaurar
+              <select id="backup-import-scope">
+                <option value="all">Todos os dados do arquivo</option>
+                <option value="model">Somente um modelo</option>
+              </select>
+            </label>
+            <label id="backup-import-model-control" hidden>
+              Modelo
+              <select id="backup-import-model"></select>
+            </label>
+            <div class="backup-actions">
+              <button id="apply-backup" type="button" class="primary">Restaurar backup</button>
+              <button id="cancel-backup" type="button" class="secondary">Cancelar</button>
+            </div>
+          </div>
+          <p id="backup-preview" class="backup-preview" hidden></p>
+        </div>
+        <p id="backup-status" class="backup-status" role="status" aria-live="polite"></p>
+      </section>
+
+      <section id="danger-tools" class="danger-tools" aria-label="Apagar dados">
+        <div class="danger-heading">
+          <h2>Apagar dados</h2>
+          <p>Escolha um(a) modelo e confirme antes da exclusão. Modelos monitorados precisam ser pausados.</p>
+        </div>
+        <div class="danger-actions">
+          <label>
+            Modelo
+            <select id="delete-report-model"></select>
+          </label>
+          <label>
+            Dados a apagar
+            <select id="delete-report-scope">
+              <option value="day">Dia Completo</option>
+              <option value="live">Live</option>
+              <option value="model">Todo o Histórico</option>
+            </select>
+          </label>
+          <label id="delete-report-live-control" hidden>
+            Live
+            <select id="delete-report-live"></select>
+          </label>
+          <button id="delete-report-data" type="button" class="danger">Apagar dados</button>
+        </div>
+        <p id="delete-report-status" class="danger-status" role="status" aria-live="polite"></p>
+      </section>
+    </section>
+      </main>
+    </div>
+  </div>
+  <script type="module" src="src/ui/reports-page.js"></script>
+</body>
+</html>

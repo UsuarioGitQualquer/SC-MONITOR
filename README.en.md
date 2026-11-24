@@ -1,5 +1,5 @@
+SC MONITOR - VERSION 5.0
 ========================================================================
-                         SC MONITOR - VERSION 5.0
 
        Local audience, chat, tips, goals, and moderation dashboard
 

@@ -1,5 +1,5 @@
+SC MONITOR - VERSIÓN 5.0
 ========================================================================
-                       SC MONITOR - VERSIÓN 5.0
 
        Panel local de audiencia, chat, propinas, metas y moderación
 

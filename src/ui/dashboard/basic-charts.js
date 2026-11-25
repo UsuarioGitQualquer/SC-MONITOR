@@ -662,6 +662,7 @@ export function buildInteractiveBarsSvg({
   showCumulative = true,
   unitLabel = "tk",
   variant = "default",
+  showAllLabels = false,
 }) {
   if (!Array.isArray(bars) || bars.length === 0) {
     return `
@@ -692,7 +693,8 @@ export function buildInteractiveBarsSvg({
   const barW = Math.max(4, Math.min(calculatedBarW, maxBarW));
   const barsWidth = barW * bars.length + gap * (bars.length - 1);
   const barsStart = padL + (plotW - barsWidth) / 2;
-  const labelEvery = bars.length <= 10 ? 1 : Math.ceil(bars.length / 8);
+  const labelEvery = showAllLabels ? 1 : bars.length <= 10 ? 1 : Math.ceil(bars.length / 8);
+  const axisLabelFontSize = showAllLabels && bars.length >= 24 ? 7 : 8.5;
   const barGradId = `scm-bargrad-${Math.random().toString(36).slice(2, 8)}`;
   const chartStyle = {
     default: { start: "#60a5fa", end: "#818cf8", track: "#252d45", accent: "#a5b4fc" },
@@ -734,7 +736,7 @@ export function buildInteractiveBarsSvg({
           }
           ${
             showLabel
-              ? `<text x="${(x + barW / 2).toFixed(1)}" y="${height - 4}" text-anchor="middle" fill="#8b92b8" font-size="8.5" font-family="sans-serif">${clean(bar.label)}</text>`
+              ? `<text x="${(x + barW / 2).toFixed(1)}" y="${height - 4}" text-anchor="middle" fill="#8b92b8" font-size="${axisLabelFontSize}" font-family="sans-serif">${clean(bar.label)}</text>`
               : ""
           }
         </g>

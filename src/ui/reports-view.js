@@ -2,6 +2,7 @@ import { clean } from "../utils/helpers.js";
 import {
   buildInteractiveBarsSvg,
   buildNeonDonutGauge,
+  buildNeonWaveAreaChart,
   buildCombinedAudienceEarningsChart,
 } from "./dashboard/basic-charts.js";
 import {
@@ -15,6 +16,7 @@ import {
   getRoomKingSourceLabel,
   hasAudienceConversionStats,
   hasAudienceStats,
+  WEEKDAY_NAMES,
 } from "./report-data.js";
 
 const RANKING_PODIUM_COLORS = [
@@ -22,6 +24,25 @@ const RANKING_PODIUM_COLORS = [
   ["#cbd5e1", "#64748b"],
   ["#fb923c", "#c2410c"],
 ];
+
+const SUMMARY_ICONS = {
+  tokens: '<circle cx="12" cy="12" r="8.5"></circle><path d="M15 8.5c-.7-.7-1.6-1-2.8-1-1.4 0-2.4.7-2.4 1.8 0 2.8 5.2 1.2 5.2 4.2 0 1.2-1.1 2-2.7 2-1.2 0-2.2-.4-3-1.2M12 5.5v13"></path>',
+  duration: '<circle cx="12" cy="12" r="8.5"></circle><path d="M12 7v5l3.5 2"></path>',
+  pace: '<path d="M4.5 18.5a9 9 0 1 1 15 0"></path><path d="m12 13 4-4M7.5 18.5h9"></path><circle cx="12" cy="13" r="1"></circle>',
+  audience: '<circle cx="9" cy="8" r="3"></circle><path d="M3.5 19v-1.5a5.5 5.5 0 0 1 11 0V19zM16 5.5a3 3 0 0 1 0 5.8M17 14a4.5 4.5 0 0 1 3.5 4.5V19h-4"></path>',
+  tips: '<path d="M20 12v7H4v-7M2.5 7.5h19v4h-19zM12 7.5v11.5"></path><path d="M12 7.5H8.5a2 2 0 1 1 2-2c0 1.1 1.5 2 1.5 2ZM12 7.5h3.5a2 2 0 1 0-2-2c0 1.1-1.5 2-1.5 2Z"></path>',
+  messages: '<path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H6l-3 2v-6.5a7.5 7.5 0 1 1 17-3Z"></path><path d="M7.5 11h.01M12 11h.01M16.5 11h.01"></path>',
+};
+
+const CHART_GROUP_ICONS = {
+  audience: '<circle cx="9" cy="8" r="3"></circle><path d="M3.5 19v-1.5a5.5 5.5 0 0 1 11 0V19zM16 5.5a3 3 0 0 1 0 5.8M17 14a4.5 4.5 0 0 1 3.5 4.5V19h-4"></path>',
+  gains: '<circle cx="12" cy="12" r="9"></circle><path d="M15 8.5c-.7-.7-1.6-1-2.8-1-1.4 0-2.4.7-2.4 1.8 0 2.8 5.2 1.2 5.2 4.2 0 1.2-1.1 2-2.7 2-1.2 0-2.2-.4-3-1.2M12 5.5v13"></path>',
+  lives: '<circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3.5 2"></path>',
+  events: '<path d="M12 3.5 14.5 9l6 1-4.5 4.2 1.1 6-5.1-2.9-5.1 2.9 1.1-6L3.5 10l6-1z"></path>',
+  activity: '<rect x="4" y="5" width="16" height="15" rx="2"></rect><path d="M8 3v4m8-4v4M4 10h16M8 14h2m4 0h2m-8 3h2"></path>',
+  comparison: '<path d="M4 19V5m0 14h16M7 15l4-4 3 2 5-6"></path><path d="M16 7h3v3"></path>',
+  moderation: '<path d="M12 3 20 6v5c0 5-3.4 8.2-8 10-4.6-1.8-8-5-8-10V6z"></path><path d="m9 12 2 2 4-4"></path>',
+};
 
 function escapeAttribute(value) {
   return String(value ?? "")
@@ -32,6 +53,87 @@ function escapeAttribute(value) {
     .replace(/>/g, "&gt;");
 }
 
+function buildReportChartGroup(title, description, category, charts = []) {
+  const chartMarkup = charts.filter((chart) => typeof chart === "string" && chart.trim()).join("");
+  const icon = CHART_GROUP_ICONS[category];
+  if (!chartMarkup || !icon) return "";
+  return `
+    <section class="report-chart-group report-chart-group--${category}">
+      <header class="report-chart-group-heading">
+        <span class="report-chart-group-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" focusable="false">${icon}</svg>
+        </span>
+        <div>
+          <h2>${clean(title)}</h2>
+          <p>${clean(description)}</p>
+        </div>
+      </header>
+      <div class="chart-grid">${chartMarkup}</div>
+    </section>
+  `;
+}
+
+function buildReportFlowCharts(timeBars, timeStepMin, subtitle) {
+  const intervalLabel = timeStepMin === 60 ? "1h" : `${timeStepMin} min`;
+  const bars = Array.isArray(timeBars) ? timeBars : [];
+  const tokenPoints = bars.map((bar) => ({
+    label: bar.label,
+    value: bar.value,
+    tooltip: bar.tooltip,
+  }));
+  const userPoints = bars
+    .filter((bar) => Number(bar.listedUsersSamples) > 0)
+    .map((bar) => ({
+      label: bar.label,
+      value: bar.avgListedUsers,
+      tooltip: `${bar.label}: ${bar.avgListedUsers} pessoas listadas (média)`,
+    }));
+
+  return buildReportChartGroup(
+    "Fluxos ao longo do tempo",
+    "Acompanhe os ganhos e a média de pessoas listadas em cada bloco.",
+    "lives",
+    [
+      buildNeonWaveAreaChart({
+        title: `🌊 Fluxo de Tokens (Blocos de ${intervalLabel})`,
+        subtitle,
+        points: tokenPoints,
+      }),
+      buildNeonWaveAreaChart({
+        title: "👥 Fluxo de Usuários (pessoas listadas)",
+        subtitle: `Média em blocos de ${intervalLabel}`,
+        points: userPoints,
+        strokeColor: "#00e5ff",
+        fillStart: "#00e5ff",
+        fillEnd: "#2563eb",
+      }),
+    ],
+  );
+}
+
+function buildHourlyAxisBars(bars) {
+  const barsByHour = new Map((Array.isArray(bars) ? bars : []).map((bar) => [bar.label, bar]));
+  return Array.from({ length: 24 }, (_, hour) => {
+    const label = `${String(hour).padStart(2, "0")}h`;
+    const bar = barsByHour.get(label);
+    return bar ? { ...bar, label } : { label, value: 0 };
+  });
+}
+
+export function buildReportEmptyState(message) {
+  return `
+    <div class="empty-state">
+      <svg class="empty-state-art" viewBox="0 0 64 48" aria-hidden="true">
+        <rect x="5" y="5" width="54" height="38" rx="9"></rect>
+        <path d="M14 34v-8h7v8m5 0V19h7v15m5 0v-5h7v5"></path>
+        <path d="m14 21 9-5 8 3 12-9"></path>
+        <circle cx="47" cy="10" r="2"></circle>
+      </svg>
+      <p>${clean(message)}</p>
+    </div>
+  `;
+}
+
 function buildSummaryStrip(cards = []) {
   const validCards = cards.filter((card) => card?.label);
   if (validCards.length === 0) return "";
@@ -39,6 +141,7 @@ function buildSummaryStrip(cards = []) {
     <div class="report-summary-strip">
       ${validCards.map((card) => `
         <div class="report-summary-item report-summary-item--${clean(card.tone || "cyan")}">
+          ${SUMMARY_ICONS[card.icon] ? `<span class="report-summary-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false">${SUMMARY_ICONS[card.icon]}</svg></span>` : ""}
           <small>${clean(card.label)}</small>
           <strong>${clean(card.value)}</strong>
           ${card.note ? `<span>${clean(card.note)}</span>` : ""}
@@ -53,21 +156,8 @@ function buildReportHero({
   eyebrow,
   subtitle,
   badges = [],
-  initials = "",
 }) {
   const safeName = clean(name || "Modelo");
-  const safeInitials = clean(
-    initials ||
-    safeName
-      .replace(/[^a-zA-Z0-9_ -]/g, "")
-      .split(/[\s_-]+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((part) => part[0])
-      .join("")
-      .toUpperCase() ||
-    "SM",
-  );
   const badgesHtml = badges
     .filter((badge) => badge?.label)
     .map((badge) =>
@@ -77,7 +167,14 @@ function buildReportHero({
 
   return `
     <section class="report-hero">
-      <div class="report-hero-avatar" aria-hidden="true">${safeInitials}</div>
+      <div class="report-hero-avatar" aria-hidden="true">
+        <svg viewBox="0 0 40 40" focusable="false" style="width:38px;height:38px;fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;stroke-width:1.6">
+          <rect x="5" y="6" width="30" height="23" rx="4"></rect>
+          <path d="M12 34h16m-8-5v5M10 23v-5h4v5m4 0v-9h4v9m4 0v-6h4v6"></path>
+          <path d="m10 15 6-4 5 2 7-5"></path>
+          <circle cx="28" cy="8" r="1.5"></circle>
+        </svg>
+      </div>
       <div class="report-hero-copy">
         <span class="report-hero-eyebrow">${clean(eyebrow)}</span>
         <h2>${safeName}</h2>
@@ -318,10 +415,23 @@ export function buildDailyAdditionalMetricsHtml(
       </section>
     `
     : "";
-  const activityRankingsHtml = showMenuRanking || showRouletteRanking || showTipRanking
-    ? `<div class="chart-grid">${leadingChart}${topTipsChart}${rouletteChart}${menuChart}</div>`
-    : "";
-  return `${activityRankingsHtml}${audienceStats}${safetyTables}`;
+  const leagueChartHtml = buildReportChartGroup(
+    "Engajamento por liga",
+    "Distribuição de usuários por nível de atividade.",
+    "audience",
+    [leadingChart],
+  );
+  const activityRankingsHtml = buildReportChartGroup(
+    "Gorjetas e eventos",
+    "Itens mais frequentes entre gorjetas, menu e roleta.",
+    "events",
+    [
+      showTipRanking ? topTipsChart : "",
+      showRouletteRanking ? rouletteChart : "",
+      showMenuRanking ? menuChart : "",
+    ],
+  );
+  return `${leagueChartHtml}${activityRankingsHtml}${audienceStats}${safetyTables}`;
 }
 
 function buildSessionComparisonTable(sessionA, sessionB, dateBr, timeStepMin = 60) {
@@ -468,7 +578,7 @@ export function buildSessionReportHtml({
   audiencePoints = [],
   timeStepMin = 60,
 }) {
-  if (!session) return `<div class="empty-state">Não há lives registradas para esta data.</div>`;
+  if (!session) return buildReportEmptyState("Não há lives registradas para esta data.");
 
   const tokens = Math.round(Number(session.tokens) || 0);
   const durationSeconds = Math.max(0, Number(session.durationSeconds) || 0);
@@ -512,10 +622,10 @@ export function buildSessionReportHtml({
   return `
     ${sessionHero}
     ${buildSummaryStrip([
-      { label: "Tokens", value: `${tokens} tk`, tone: "cyan" },
-      { label: "Duração", value: formatReportDuration(durationSeconds), tone: "purple" },
-      { label: "Tokens/hora", value: `${tokensPerHour} tk/h`, tone: "orange" },
-      { label: "Público", value: `${peakViewers} / ${avgViewers}`, note: "pico / média", tone: "pink" },
+      { label: "Tokens", value: `${tokens} tk`, tone: "cyan", icon: "tokens" },
+      { label: "Duração", value: formatReportDuration(durationSeconds), tone: "purple", icon: "duration" },
+      { label: "Tokens/hora", value: `${tokensPerHour} tk/h`, tone: "orange", icon: "pace" },
+      { label: "Público", value: `${peakViewers} / ${avgViewers}`, note: "pico / média", tone: "pink", icon: "audience" },
     ])}
     <div class="combined-report-chart">
       ${buildCombinedAudienceEarningsChart({
@@ -530,6 +640,11 @@ export function buildSessionReportHtml({
         eventMarkers: [],
       })}
     </div>
+    ${buildReportFlowCharts(
+      timeBars,
+      timeStepMin,
+      `${dateBr} · ${session.startedAt || "--:--"}–${session.endedAt || "ativa"}`,
+    )}
     ${sessionInsights}
     ${buildSessionComparisonTable(session, comparisonSession, dateBr, timeStepMin)}
     <div class="chart-grid">
@@ -546,22 +661,6 @@ export function buildPeriodAdditionalMetricsHtml(
   leadingChart = "",
 ) {
   const groupedTimeLabel = summary.isWeekly ? "por semana" : summary.isMonthly ? "por mês" : "por dia";
-  const newTipperChart = summary.audienceDays > 0
-    ? buildInteractiveBarsSvg({
-      title: `Doadores novos ${groupedTimeLabel}`,
-      subtitle: "Soma dos doadores por per\u00edodo",
-      bars: summary.newTipperBars || [],
-      variant: "mint",
-    })
-    : "";
-  const returningTipperChart = summary.audienceDays > 0
-    ? buildInteractiveBarsSvg({
-      title: `Doadores recorrentes ${groupedTimeLabel}`,
-      subtitle: "Soma dos doadores por per\u00edodo",
-      bars: summary.returningTipperBars || [],
-      variant: "violet",
-    })
-    : "";
   const menuChart = showMenuRanking
     ? buildPopularItemsChart("Op\u00e7\u00f5es mais pedidas do menu", summary.menuOptionRows, {
       accentColor: "#fb7185",
@@ -617,14 +716,24 @@ export function buildPeriodAdditionalMetricsHtml(
     : "";
   const safetyTables = buildSafetyTables({ ...summary, enableSuspectRemoval });
   return `
-    <div class="chart-grid">
-      ${leadingChart}
-      ${rouletteChart}
-      ${newTipperChart}
-      ${returningTipperChart}
-      ${safetyCharts}
-      ${menuChart}
-    </div>
+    ${buildReportChartGroup(
+      "Ligas e comunidade",
+      "Distribuição de usuários por nível de atividade.",
+      "audience",
+      [leadingChart],
+    )}
+    ${buildReportChartGroup(
+      "Eventos e rankings",
+      "Itens mais frequentes do menu e da roleta.",
+      "events",
+      [rouletteChart, menuChart],
+    )}
+    ${buildReportChartGroup(
+      "Segurança e moderação",
+      "Registros de suspeitas e usuários silenciados.",
+      "moderation",
+      [safetyCharts],
+    )}
     ${donorRows}
     ${safetyTables}
   `;
@@ -711,16 +820,18 @@ export function buildDailyReportHtml({
       return {
         index: index + 1,
         startedAt: session.startedAt || "--:--",
+        durationSeconds,
         tokensPerHour: durationSeconds > 0 ? Math.round((tokens / durationSeconds) * 3600) : 0,
       };
     });
-  const validPaceSessions = paceSessions.filter((session) => session.tokensPerHour > 0);
+  const timedPaceSessions = paceSessions.filter((session) => session.durationSeconds > 0);
+  const validPaceSessions = timedPaceSessions.filter((session) => session.tokensPerHour > 0);
   const bestPaceSession = validPaceSessions.reduce(
     (best, session) => !best || session.tokensPerHour > best.tokensPerHour ? session : best,
     null,
   );
-  const averageSessionPace = validPaceSessions.length > 0
-    ? validPaceSessions.reduce((sum, session) => sum + session.tokensPerHour, 0) / validPaceSessions.length
+  const averageSessionPace = timedPaceSessions.length > 0
+    ? timedPaceSessions.reduce((sum, session) => sum + session.tokensPerHour, 0) / timedPaceSessions.length
     : 0;
   const sessionBars = buildInteractiveBarsSvg({
     title: "Tokens por live",
@@ -787,15 +898,15 @@ export function buildDailyReportHtml({
     leadingDayGainType && dayClassifiedTokens > 0
       ? `${leadingDayGainType.label} foi a principal fonte entre os ganhos classificados (${Math.round((leadingDayGainType.value / dayClassifiedTokens) * 100)}% do total categorizado).`
       : "",
-    largestTip && totalDayTokens > 0 && largestTipTokens <= totalDayTokens
+    largestTip && largestTipTokens > 0 && totalDayTokens > 0 && largestTipTokens <= totalDayTokens
       ? `A maior gorjeta representou ${Math.round((largestTipTokens / totalDayTokens) * 100)}% dos tokens do dia.`
       : "",
-    bestPaceSession && validPaceSessions.length > 1
+    bestPaceSession && timedPaceSessions.length > 1
       ? (() => {
         const difference = getPercentDifference(bestPaceSession.tokensPerHour, averageSessionPace);
         return difference === null
           ? ""
-          : `A live ${bestPaceSession.index} teve ritmo ${Math.abs(difference)}% ${difference >= 0 ? "acima" : "abaixo"} da média das lives.`;
+          : `A live ${bestPaceSession.index} teve ritmo ${Math.abs(difference)}% ${difference >= 0 ? "acima" : "abaixo"} da média das lives com duração registrada.`;
       })()
       : "",
   ]);
@@ -804,10 +915,32 @@ export function buildDailyReportHtml({
     ? [
       { label: "Ganhos em tokens", current: report.totalTokens, previous: comparisonReport.totalTokens, unit: "tk" },
       { label: "Ritmo de ganhos", current: tokensPerHour, previous: comparisonPace, unit: "tk/h" },
-      { label: "Média de espectadores", current: report.avgViewers, previous: comparisonReport.avgViewers, unit: "espectadores" },
-      { label: "Pico de espectadores", current: report.peakViewers, previous: comparisonReport.peakViewers, unit: "espectadores" },
     ]
     : [];
+  if (
+    comparisonReport &&
+    Number(report.avgViewers) > 0 &&
+    Number(comparisonReport.avgViewers) > 0
+  ) {
+    comparisonMetrics.push({
+      label: "Média de espectadores",
+      current: report.avgViewers,
+      previous: comparisonReport.avgViewers,
+      unit: "espectadores",
+    });
+  }
+  if (
+    comparisonReport &&
+    Number(report.peakViewers) > 0 &&
+    Number(comparisonReport.peakViewers) > 0
+  ) {
+    comparisonMetrics.push({
+      label: "Pico de espectadores",
+      current: report.peakViewers,
+      previous: comparisonReport.peakViewers,
+      unit: "espectadores",
+    });
+  }
   const previousBestTimeBar = bestTimeBar
     ? comparisonTimeBars.find((bar) => bar.label === bestTimeBar.label)
     : null;
@@ -956,12 +1089,12 @@ export function buildDailyReportHtml({
   return `
     ${dailyHero}
     ${buildSummaryStrip([
-      { label: "Tokens", value: `${Math.round(Number(report.totalTokens) || 0)} tk`, tone: "cyan" },
-      { label: "Horas", value: formatReportDuration(report.netSeconds), note: `bruto ${formatReportDuration(report.bruteSeconds)}`, tone: "purple" },
-      { label: "Tokens/hora", value: `${tokensPerHour} tk/h`, tone: "orange" },
-      { label: "Doadores", value: String(topUsers.length), note: "usuários únicos", tone: "pink" },
-      { label: "Gorjetas", value: String(Math.round(Number(report.totalTips) || 0)), note: "registradas", tone: "amber" },
-      { label: "Mensagens", value: String(Math.round(Number(report.totalMessages) || 0)), tone: "blue" },
+      { label: "Tokens", value: `${Math.round(Number(report.totalTokens) || 0)} tk`, tone: "cyan", icon: "tokens" },
+      { label: "Horas", value: formatReportDuration(report.netSeconds), note: `bruto ${formatReportDuration(report.bruteSeconds)}`, tone: "purple", icon: "duration" },
+      { label: "Tokens/hora", value: `${tokensPerHour} tk/h`, tone: "orange", icon: "pace" },
+      { label: "Doadores", value: String(topUsers.length), note: "usuários únicos", tone: "pink", icon: "audience" },
+      { label: "Gorjetas", value: String(Math.round(Number(report.totalTips) || 0)), note: "registradas", tone: "amber", icon: "tips" },
+      { label: "Mensagens", value: String(Math.round(Number(report.totalMessages) || 0)), tone: "blue", icon: "messages" },
     ])}
     <div class="combined-report-chart">
       ${buildCombinedAudienceEarningsChart({
@@ -976,6 +1109,7 @@ export function buildDailyReportHtml({
         eventMarkers: dailyEventMarkers,
       })}
     </div>
+    ${buildReportFlowCharts(timeBars, timeStepMin, report.dateBr)}
     <div class="metric-grid">
       <div class="metric-card metric-card--audience"><small>Pico / média de espectadores</small><strong>${report.peakViewers} / ${report.avgViewers}</strong></div>
       <div class="metric-card metric-card--highlight"><small>Melhor intervalo</small><strong>${bestTimeBar ? `${clean(bestTimeBar.label)} · ${Math.round(bestTimeBar.value)} tk` : "—"}</strong></div>
@@ -1027,27 +1161,45 @@ export function buildDailyReportHtml({
       </section>
     </div>
 
-    <div class="chart-grid">
-      ${buildNeonDonutGauge({
-        label: "Retenção de público",
-        sublabel: `${Number(audience.returningUsers) || 0} recorrentes`,
-        percent: returnRate,
-        colorStart: "#ff2a6d",
-        colorEnd: "#8a2be2",
-      })}
-      ${buildNeonDonutGauge({
-        label: "Aproveitamento da live",
-        sublabel: "Tempo líquido vs. bruto",
-        percent: efficiency,
-        colorStart: "#00e5ff",
-        colorEnd: "#2563eb",
-      })}
-
-      ${buildGainTypeChart(daily?.eventSummaryTotals)}
-      ${buildReportUsersChart(report.uPeak, report.uAvg, report.dateBr)}
-      ${sessionDurationBars}
-      ${sessionBars}
-    </div>
+    ${buildReportChartGroup(
+      "Público e usuários",
+      "Retenção, pico e média de usuários registrados no dia.",
+      "audience",
+      [
+        audienceStatsAvailable
+          ? buildNeonDonutGauge({
+            label: "Retenção de público",
+            sublabel: `${Number(audience.returningUsers) || 0} recorrentes`,
+            percent: returnRate,
+            colorStart: "#ff2a6d",
+            colorEnd: "#8a2be2",
+          })
+          : "",
+        buildReportUsersChart(report.uPeak, report.uAvg, report.dateBr),
+      ],
+    )}
+    ${buildReportChartGroup(
+      "Ganhos por categoria",
+      "Composição dos ganhos classificados no dia.",
+      "gains",
+      [buildGainTypeChart(daily?.eventSummaryTotals)],
+    )}
+    ${buildReportChartGroup(
+      "Desempenho das lives",
+      "Duração, ganhos e aproveitamento do tempo ao vivo.",
+      "lives",
+      [
+        buildNeonDonutGauge({
+          label: "Aproveitamento da live",
+          sublabel: "Tempo líquido vs. bruto",
+          percent: efficiency,
+          colorStart: "#00e5ff",
+          colorEnd: "#2563eb",
+        }),
+        sessionDurationBars,
+        sessionBars,
+      ],
+    )}
 
     ${buildDailyAdditionalMetricsHtml(report, daily, false, enableSuspectRemoval, {
       menu: true,
@@ -1308,20 +1460,29 @@ export function buildPeriodReportHtml(
       })}
     `
     : "";
-  const weekdayTokenBars = (Array.isArray(summary.weekdayStats) ? summary.weekdayStats : [])
-    .filter((day) => day.days > 0)
-    .map((day) => {
-      const average = Math.round(day.tokens / day.days);
+  const weekdayStatsByName = new Map(
+    (Array.isArray(summary.weekdayStats) ? summary.weekdayStats : [])
+      .map((day) => [day.name, day]),
+  );
+  const hasWeekdayRecords = [...weekdayStatsByName.values()].some((day) => day.days > 0);
+  const weekdayTokenBars = hasWeekdayRecords
+    ? WEEKDAY_NAMES.map((name) => {
+      const day = weekdayStatsByName.get(name);
+      const days = day?.days || 0;
+      const average = days > 0 ? Math.round(day.tokens / days) : 0;
       return {
-        label: day.name,
+        label: name,
         value: average,
-        tooltip: `${day.name}: média de ${average} tk/dia em ${day.days} dia(s)`,
+        tooltip: days > 0
+          ? `${name}: média de ${average} tk/dia em ${days} dia(s)`
+          : `${name}: sem registros no período`,
       };
-    });
-  const weekdayTokenChart = weekdayTokenBars.length > 1
+    })
+    : [];
+  const weekdayTokenChart = weekdayTokenBars.length > 0
     ? buildInteractiveBarsSvg({
       title: "Média de tokens por dia da semana",
-      subtitle: "Comparação entre dias com registros",
+      subtitle: "Domingo a sábado · vazios = sem registro",
       bars: weekdayTokenBars,
       showCumulative: false,
       variant: "sunset",
@@ -1384,10 +1545,35 @@ export function buildPeriodReportHtml(
     ? buildInteractiveBarsSvg({
       title: "Ritmo de ganhos por horário",
       subtitle: "Média de tk/h por hora ativa",
-      bars: summary.hourlyPaceBars,
+      bars: buildHourlyAxisBars(summary.hourlyPaceBars),
       showCumulative: false,
       unitLabel: " tk/h",
       variant: "default",
+      showAllLabels: true,
+    })
+    : "";
+  const activeDaysForHourlyAverage = Math.max(0, Number(summary.activeDays) || 0);
+  const hourlyTokenBars = Array.isArray(summary.hourlyBars) ? summary.hourlyBars : [];
+  const hourlyAverageBars = activeDaysForHourlyAverage > 0
+    ? hourlyTokenBars.map((hour) => {
+      const tokens = Math.max(0, Number(hour.value) || 0);
+      const average = Math.round(tokens / activeDaysForHourlyAverage);
+      return {
+        label: hour.label,
+        value: average,
+        tooltip: `${hour.label}: média de ${average} tk por dia ativo (${tokens} tk em ${activeDaysForHourlyAverage} dias)`,
+      };
+    })
+    : [];
+  const hourlyAverageChart = hourlyAverageBars.some((bar) => bar.value > 0)
+    ? buildInteractiveBarsSvg({
+      title: "Média de tokens por horário",
+      subtitle: `Média por dia ativo · ${activeDaysForHourlyAverage} dias`,
+      bars: hourlyAverageBars,
+      showCumulative: false,
+      unitLabel: " tk/dia",
+      variant: "mint",
+      showAllLabels: true,
     })
     : "";
   const weekdayRows = summary.weekdayStats.map((day) => `
@@ -1421,38 +1607,63 @@ export function buildPeriodReportHtml(
     ? buildInteractiveBarsSvg({
       title: "Média de espectadores por horário",
       subtitle: "Média ponderada pelas amostras do período",
-      bars: summary.audienceHourBars,
+      bars: buildHourlyAxisBars(summary.audienceHourBars),
       showCumulative: false,
       variant: "default",
+      showAllLabels: true,
     })
     : "";
   const listedUsersHourChart = summary.listedUsersHourBars?.length
     ? buildInteractiveBarsSvg({
       title: "Média de usuários listados por horário",
       subtitle: "Média ponderada pelas amostras do período",
-      bars: summary.listedUsersHourBars,
+      bars: buildHourlyAxisBars(summary.listedUsersHourBars),
       showCumulative: false,
       variant: "mint",
+      showAllLabels: true,
     })
     : "";
   const tokensUsersHourChart = summary.tokensUsersHourBars?.length
     ? buildInteractiveBarsSvg({
       title: "Média de usuários com tokens por horário",
       subtitle: "Média ponderada pelas amostras do período",
-      bars: summary.tokensUsersHourBars,
+      bars: buildHourlyAxisBars(summary.tokensUsersHourBars),
       showCumulative: false,
       unitLabel: " usuários",
       variant: "rose",
+      showAllLabels: true,
+    })
+    : "";
+  const tokensUsersDayChart = summary.tokensUsersDayBars?.length
+    ? buildInteractiveBarsSvg({
+      title: "Média de usuários com tokens por dia",
+      subtitle: "Média das amostras registradas em cada data",
+      bars: summary.tokensUsersDayBars,
+      showCumulative: false,
+      unitLabel: " usuários",
+      variant: "violet",
+    })
+    : "";
+  const tokensUsersWeekdayChart = summary.tokensUsersWeekdayBars?.length
+    ? buildInteractiveBarsSvg({
+      title: "Média de usuários com tokens por dia da semana",
+      subtitle: "Domingo a sábado · vazios = sem registro",
+      bars: summary.tokensUsersWeekdayBars,
+      showCumulative: false,
+      unitLabel: " usuários",
+      variant: "rose",
+      showAllLabels: true,
     })
     : "";
   const tokensUsersPeakHourChart = summary.tokensUsersPeakHourBars?.length
     ? buildInteractiveBarsSvg({
       title: "Pico de usuários com tokens por horário",
       subtitle: "Maior contagem registrada em cada hora",
-      bars: summary.tokensUsersPeakHourBars,
+      bars: buildHourlyAxisBars(summary.tokensUsersPeakHourBars),
       showCumulative: false,
       unitLabel: " usuários",
       variant: "amber",
+      showAllLabels: true,
     })
     : "";
   const liveSessionRows = Array.isArray(summary.liveSessionRows)
@@ -1556,18 +1767,6 @@ export function buildPeriodReportHtml(
         unit: "tk/dia",
       },
       {
-        label: "Média de espectadores",
-        current: summary.periodAvgViewers,
-        previous: comparisonSummary.periodAvgViewers,
-        unit: "espectadores",
-      },
-      {
-        label: "Pico de espectadores",
-        current: summary.maxPeak,
-        previous: comparisonSummary.maxPeak,
-        unit: "espectadores",
-      },
-      {
         label: "Dias ativos",
         current: summary.activeDays,
         previous: comparisonSummary.activeDays,
@@ -1575,6 +1774,30 @@ export function buildPeriodReportHtml(
       },
     ]
     : [];
+  if (
+    comparisonSummary &&
+    Number(summary.periodAvgViewers) > 0 &&
+    Number(comparisonSummary.periodAvgViewers) > 0
+  ) {
+    periodComparisonMetrics.push({
+      label: "Média de espectadores",
+      current: summary.periodAvgViewers,
+      previous: comparisonSummary.periodAvgViewers,
+      unit: "espectadores",
+    });
+  }
+  if (
+    comparisonSummary &&
+    Number(summary.maxPeak) > 0 &&
+    Number(comparisonSummary.maxPeak) > 0
+  ) {
+    periodComparisonMetrics.push({
+      label: "Pico de espectadores",
+      current: summary.maxPeak,
+      previous: comparisonSummary.maxPeak,
+      unit: "espectadores",
+    });
+  }
   if (summary.bestTokenHour && comparisonSummary?.hourlyBars) {
     const previousHour = comparisonSummary.hourlyBars.find(
       (hour) => hour.label === summary.bestTokenHour.label,
@@ -1622,24 +1845,26 @@ export function buildPeriodReportHtml(
         showCumulative: false,
         variant: "sunset",
       })}
-      ${buildInteractiveBarsSvg({
-        title: "Comparação da média de espectadores",
-        subtitle: "Média ponderada pelas amostras",
-        bars: [
-          {
-            label: "Período A",
-            value: summary.periodAvgViewers,
-            tooltip: `${summary.start} a ${summary.end}: média de ${summary.periodAvgViewers} espectadores`,
-          },
-          {
-            label: "Período B",
-            value: comparisonSummary.periodAvgViewers,
-            tooltip: `${comparisonSummary.start} a ${comparisonSummary.end}: média de ${comparisonSummary.periodAvgViewers} espectadores`,
-          },
-        ],
-        showCumulative: false,
-        variant: "mint",
-      })}
+      ${Number(summary.periodAvgViewers) > 0 && Number(comparisonSummary.periodAvgViewers) > 0
+        ? buildInteractiveBarsSvg({
+          title: "Comparação da média de espectadores",
+          subtitle: "Média ponderada pelas amostras",
+          bars: [
+            {
+              label: "Período A",
+              value: summary.periodAvgViewers,
+              tooltip: `${summary.start} a ${summary.end}: média de ${summary.periodAvgViewers} espectadores`,
+            },
+            {
+              label: "Período B",
+              value: comparisonSummary.periodAvgViewers,
+              tooltip: `${comparisonSummary.start} a ${comparisonSummary.end}: média de ${comparisonSummary.periodAvgViewers} espectadores`,
+            },
+          ],
+          showCumulative: false,
+          variant: "mint",
+        })
+        : ""}
     `
     : "";
   const weekdayTokenDifference = summary.bestTokenWeekday
@@ -1648,12 +1873,10 @@ export function buildPeriodReportHtml(
   const weekdayAudienceDifference = summary.busiestWeekday
     ? getPercentDifference(summary.busiestWeekday.avg, summary.periodAvgViewers)
     : null;
-  const livePaceAverage = liveSessionRows
-    .filter((session) => session.durationSeconds > 0 && session.tokensPerHour > 0)
+  const timedLiveSessions = liveSessionRows.filter((session) => session.durationSeconds > 0);
+  const livePaceAverage = timedLiveSessions
     .reduce((sum, session) => sum + session.tokensPerHour, 0);
-  const livePaceCount = liveSessionRows.filter(
-    (session) => session.durationSeconds > 0 && session.tokensPerHour > 0,
-  ).length;
+  const livePaceCount = timedLiveSessions.length;
   const livePaceDifference = summary.bestLiveByPace && livePaceCount > 1
     ? getPercentDifference(
       summary.bestLiveByPace.tokensPerHour,
@@ -1719,7 +1942,7 @@ export function buildPeriodReportHtml(
       ? `${summary.busiestWeekday.name} teve público médio ${Math.abs(weekdayAudienceDifference)}% ${weekdayAudienceDifference >= 0 ? "acima" : "abaixo"} da média do período.`
       : "",
     livePaceDifference !== null && livePaceDifference > 0
-      ? `${summary.bestLiveByPace.label} teve ritmo ${livePaceDifference}% acima da média das lives com duração registrada.`
+      ? `${summary.bestLiveByPace.label} teve ritmo ${livePaceDifference}% acima da média de todas as lives com duração registrada.`
       : "",
   ]);
   const periodHero = buildReportHero({
@@ -1736,12 +1959,12 @@ export function buildPeriodReportHtml(
   return `
     ${periodHero}
     ${buildSummaryStrip([
-      { label: "Tokens", value: `${Math.round(summary.totalPeriodTokens)} tk`, tone: "cyan" },
-      { label: "Horas líquidas", value: formatReportDuration(summary.periodNetSeconds), note: `${summary.activeDays} dias ativos`, tone: "purple" },
-      { label: "Tokens/hora", value: `${summary.audienceEfficiency?.tokensPerNetHour || 0} tk/h`, tone: "orange" },
-      { label: "Doadores", value: String(Array.isArray(summary.donorRows) ? summary.donorRows.length : 0), note: "usuários únicos", tone: "pink" },
-      { label: "Gorjetas", value: String(Math.round(Number(summary.totalTips) || 0)), note: "registradas", tone: "amber" },
-      { label: "Mensagens", value: String(Math.round(Number(summary.totalMessages) || 0)), tone: "blue" },
+      { label: "Tokens", value: `${Math.round(summary.totalPeriodTokens)} tk`, tone: "cyan", icon: "tokens" },
+      { label: "Horas líquidas", value: formatReportDuration(summary.periodNetSeconds), note: `${summary.activeDays} dias ativos`, tone: "purple", icon: "duration" },
+      { label: "Tokens/hora", value: `${summary.audienceEfficiency?.tokensPerNetHour || 0} tk/h`, tone: "orange", icon: "pace" },
+      { label: "Doadores", value: String(Array.isArray(summary.donorRows) ? summary.donorRows.length : 0), note: "usuários únicos", tone: "pink", icon: "audience" },
+      { label: "Gorjetas", value: String(Math.round(Number(summary.totalTips) || 0)), note: "registradas", tone: "amber", icon: "tips" },
+      { label: "Mensagens", value: String(Math.round(Number(summary.totalMessages) || 0)), tone: "blue", icon: "messages" },
     ])}
     <div class="metric-grid">
       <div class="metric-card metric-card--highlight"><small>Melhor dia</small><strong>${clean(summary.bestDay.dateBr)} · ${summary.bestDay.tokens} tk</strong></div>
@@ -1760,47 +1983,80 @@ export function buildPeriodReportHtml(
     ${buildAudienceConversionHtml(summary.audienceConversion)}
     ${buildAudienceEfficiencyHtml(summary)}
 
-    <div class="chart-grid">
-      ${buildNeonDonutGauge({
-        label: "Frequência de lives",
-        sublabel: `${summary.activeDays} de ${summary.dayBars.length} dias`,
-        percent: summary.activeRatioPct,
-      })}
-      ${buildInteractiveBarsSvg({
-        title: summary.isWeekly ? "Ganhos por semana" : summary.isMonthly ? "Ganhos por mês" : "Ganhos por dia",
-        subtitle: `${summary.chartBars.length} intervalo(s)`,
-        bars: summary.chartBars,
-        variant: "sunset",
-      })}
-      ${weekdayPaceChart}
-      ${dailyPaceChart}
-      ${hourlyPaceChart}
-      ${dailyAudienceComparisonChart}
-      ${dailyPeakAudienceChart}
-      ${buildInteractiveBarsSvg({
-        title: "Tokens por horário",
-        subtitle: "Acumulado no período",
-        bars: summary.hourlyBars,
-        showCumulative: false,
-        variant: "amber",
-      })}
-      ${weekdayTokenChart}
-      ${audienceHourChart}
-      ${listedUsersHourChart}
-      ${tokensUsersHourChart}
-      ${tokensUsersPeakHourChart}
-      ${bruteDurationDayChart}
-      ${durationDayChart}
-      ${liveDurationChart}
-      ${liveTokenChart}
-      ${livePaceChart}
-      ${periodComparisonCharts}
-      ${largestTipChart}
-      ${buildGainTypeChart(summary.eventSummaryTotals, summary.eventSummaryDays)}
-      ${audienceCharts}
-      ${tipperCharts}
-      ${buildReportUsersChart(summary.periodUserPeak, summary.periodUserAvg, "Pico / média no período")}
-    </div>
+    ${buildReportChartGroup(
+      "Tendências e ganhos",
+      "Tokens e ritmo por período, horário e categoria.",
+      "gains",
+      [
+        buildInteractiveBarsSvg({
+          title: summary.isWeekly ? "Ganhos por semana" : summary.isMonthly ? "Ganhos por mês" : "Ganhos por data",
+          subtitle: `${summary.chartBars.length} intervalo(s)`,
+          bars: summary.chartBars,
+          variant: "sunset",
+        }),
+        weekdayTokenChart,
+        dailyPaceChart,
+        weekdayPaceChart,
+        hourlyPaceChart,
+        buildInteractiveBarsSvg({
+          title: "Tokens por horário",
+          subtitle: "Acumulado no período",
+          bars: summary.hourlyBars,
+          showCumulative: false,
+          variant: "amber",
+          showAllLabels: true,
+        }),
+        hourlyAverageChart,
+        buildGainTypeChart(summary.eventSummaryTotals, summary.eventSummaryDays),
+        largestTipChart,
+      ],
+    )}
+    ${buildReportChartGroup(
+      "Público e usuários",
+      "Evolução de espectadores, usuários e recorrência.",
+      "audience",
+      [
+        dailyAudienceComparisonChart,
+        dailyPeakAudienceChart,
+        audienceHourChart,
+        listedUsersHourChart,
+        tokensUsersHourChart,
+        tokensUsersDayChart,
+        tokensUsersWeekdayChart,
+        tokensUsersPeakHourChart,
+        audienceCharts,
+        buildReportUsersChart(summary.periodUserPeak, summary.periodUserAvg, "Pico / média no período"),
+      ],
+    )}
+    ${buildReportChartGroup(
+      "Lives e duração",
+      "Frequência, tempo ao vivo, ganhos e ritmo por sessão.",
+      "lives",
+      [
+        buildNeonDonutGauge({
+          label: "Frequência de lives",
+          sublabel: `${summary.activeDays} de ${summary.dayBars.length} dias`,
+          percent: summary.activeRatioPct,
+        }),
+        bruteDurationDayChart,
+        durationDayChart,
+        liveDurationChart,
+        liveTokenChart,
+        livePaceChart,
+      ],
+    )}
+    ${buildReportChartGroup(
+      "Doadores e recorrência",
+      "Contagem de novos e recorrentes doadores ao longo do período.",
+      "events",
+      [tipperCharts],
+    )}
+    ${buildReportChartGroup(
+      "Comparação entre períodos",
+      "Variação das principais métricas em relação ao período anterior.",
+      "comparison",
+      [periodComparisonCharts],
+    )}
 
     ${buildPeriodAdditionalMetricsHtml(
       summary,
@@ -1809,8 +2065,15 @@ export function buildPeriodReportHtml(
       true,
       buildReportLeaguesChart(summary.periodLeaguePeak, summary.periodLeagueAvg, "Pico / média no período"),
     )}
-    ${buildHeatmapHtml(summary.heatmap)}
-    ${buildActivityTimelineHtml(summary.activityTimeline)}
+    ${buildReportChartGroup(
+      "Padrões de atividade",
+      "Distribuição de tokens, eventos e moderação por dia e horário.",
+      "activity",
+      [
+        buildHeatmapHtml(summary.heatmap),
+        buildActivityTimelineHtml(summary.activityTimeline),
+      ],
+    )}
     ${buildEngagementTableHtml(summary)}
     ${buildLeagueEngagementHtml(summary.leagueEngagementRows)}
     ${buildGoalShowTimelineHtml(summary)}

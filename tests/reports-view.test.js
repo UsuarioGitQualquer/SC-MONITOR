@@ -547,8 +547,8 @@ test("renders period totals and weekday summaries", () => {
       { name: "Quarta", days: 2, tokens: 220, viewerSamples: 4, viewerSum: 32, peakViewers: 20 },
       { name: "Sexta", days: 1, tokens: 100, viewerSamples: 2, viewerSum: 16, peakViewers: 16 },
     ],
-    newUserBars: [{ label: "05/01", value: 4 }],
-    returningUserBars: [{ label: "05/01", value: 6 }],
+    newUserBars: [{ label: "05/01", value: 4, tooltip: "05/01: 4 novos usuários" }],
+    returningUserBars: [{ label: "05/01", value: 6, tooltip: "05/01: 6 usuários recorrentes" }],
     newTipperBars: [{ label: "05/01", value: 2 }],
     returningTipperBars: [{ label: "05/01", value: 3 }],
     audienceDays: 1,
@@ -577,8 +577,8 @@ test("renders period totals and weekday summaries", () => {
     moderationPendingCount: 0,
     newTipperBars: [{ label: "05/01", value: 2 }],
     returningTipperBars: [{ label: "05/01", value: 3 }],
-    suspectBars: [{ label: "05/01", value: 1 }],
-    mutedBars: [{ label: "05/01", value: 1 }],
+    suspectBars: [{ label: "05/01", value: 1, tooltip: "05/01: 1 suspeita(s) registrada(s)" }],
+    mutedBars: [{ label: "05/01", value: 1, tooltip: "05/01: 1 usuário(s) silenciado(s)" }],
     activeRatioPct: 60,
     isWeekly: false,
     isMonthly: false,
@@ -678,6 +678,14 @@ test("renders period totals and weekday summaries", () => {
     const svg = getChartSvg(title);
     assert.match(svg, /<rect[^>]*fill="url\(#scm-bargrad-/);
     assert.doesNotMatch(svg, /<path /);
+  }
+  for (const title of [
+    "Suspeitas de bots por dia",
+    "Silenciados por dia",
+    "Novos usuários por dia",
+    "Usuários recorrentes por dia",
+  ]) {
+    assert.doesNotMatch(getChartSvg(title), /Acumulado:/);
   }
   const tokensUsersWeekdaySvg = getChartSvg("Média de usuários com tokens por dia da semana");
   for (const weekday of ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"]) {
@@ -793,6 +801,26 @@ test("identifies the recorded date in period insights", () => {
   for (const weekday of ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"]) {
     assert.match(weekdayChart, new RegExp(`>${weekday}</text>`));
   }
+});
+
+test("always shows both moderation charts for a period with no moderation records", () => {
+  const date = "2026-11-25";
+  const summary = buildPeriodReportSummary({
+    modelId: "model",
+    start: date,
+    end: date,
+    dateKeys: [date],
+    dailyByDate: { [date]: { date } },
+  });
+  const html = buildPeriodReportHtml(summary);
+  const moderationGroup = html.match(
+    /<section class="report-chart-group report-chart-group--moderation">[\s\S]*?<\/section>/,
+  )?.[0];
+
+  assert.ok(moderationGroup);
+  assert.match(moderationGroup, /Suspeitas de bots por dia/);
+  assert.match(moderationGroup, /Silenciados por dia/);
+  assert.equal((moderationGroup.match(/class="scm-cyber-card"/g) || []).length, 2);
 });
 
 test("omits audience comparisons when neither period has viewer samples", () => {

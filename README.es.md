@@ -189,6 +189,70 @@ COMPARACIONES POR DÍA DE LA SEMANA Y TRANSPARENCIA DE LAS MÉTRICAS
      audiencia, contribuciones por liga e historial combinado de metas y
      shows.
 
+   CÓMO LEER LOS GRÁFICOS DE LOS INFORMES
+
+   - La página ofrece tres vistas: Día, Sesión y Período. Elige el modelo/sala
+     y los datos disponibles. En el informe por período, define las fechas y
+     agrupa los resultados por día, semana o mes. También puedes comparar dos
+     períodos.
+
+   - En los informes de Día y Sesión, el gráfico combinado muestra los tokens
+     por intervalo junto con la evolución de la audiencia. El informe diario
+     marca los shows registrados. Los gráficos de flujo detallan tokens y
+     usuarios listados; elige el tamaño de los bloques o usa Automático para
+     ajustarlo a la duración registrada. Los tokens sin hora se muestran aparte
+     y no se distribuyen artificialmente entre los bloques.
+
+   - Los gráficos e indicadores de audiencia del informe diario muestran la
+     retención, los picos/promedios de usuarios y la distribución por liga.
+     La composición de ganancias agrupa tokens por categoría. Los gráficos de
+     rendimiento comparan la duración y los tokens de las lives del día. Las
+     clasificaciones muestran las mayores propinas individuales, las opciones
+     del menú y los resultados registrados de la ruleta. Cuando hay datos, las
+     tablas también muestran lives, donantes, usuarios sospechosos y usuarios
+     silenciados.
+
+   - El gráfico combinado del informe por Sesión muestra la audiencia y las
+     ganancias de la live en los intervalos seleccionados. También incluye el
+     flujo de tokens y usuarios listados, las ganancias por categoría y una
+     tabla con las principales diferencias cuando se selecciona otra sesión
+     para comparar.
+
+   - En los informes por Período, «Ganancias por fecha/semana/mes» suma los
+     tokens de cada agrupación. «Tokens por hora» reúne los registros de la
+     misma hora en todo el período; «Promedio de tokens por hora» divide ese
+     total por los días activos. Los gráficos de ritmo usan tokens por hora
+     neta de transmisión (tk/h). «Mayor propina» muestra el valor máximo de
+     cada agrupación, no la suma de las propinas.
+
+   - Los gráficos de audiencia incluyen picos y promedios diarios de
+     espectadores, promedios por hora y promedios de usuarios listados y de
+     usuarios con tokens por hora, fecha y día de la semana. Los promedios
+     horarios de audiencia y usuarios se ponderan por las muestras
+     registradas; los promedios por fecha o día de la semana usan los días con
+     datos. El pico de usuarios con tokens por hora es el mayor recuento
+     observado en esa hora, no un promedio.
+
+   - Los gráficos de lives muestran la frecuencia de días activos, la duración
+     bruta y neta, los tokens y el ritmo por live. Los gráficos de usuarios
+     nuevos/recurrentes y donantes muestran su evolución por agrupación; en las
+     series de donantes, una misma persona puede aparecer en varios días. La
+     comparación entre períodos muestra promedios de tokens y, cuando hay
+     datos, de espectadores.
+
+   - El mapa de calor organiza los tokens por día de la semana y hora; la
+     intensidad del color representa los tokens, y el tooltip también muestra
+     eventos y el promedio de espectadores. La cronología separa los eventos
+     de la moderación por hora. Las tablas de interacción, ligas, donantes y
+     rey de la sala complementan los gráficos con métricas individuales o
+     agregadas.
+
+   - Los gráficos de sospechosos y silenciados cuentan usuarios distintos en
+     cada intervalo; no son un recuento acumulado de personas únicas en todo el
+     período. La sospecha de bot es heurística, no una confirmación. Los
+     gráficos pueden aparecer vacíos si no se guardaron registros; los valores
+     ausentes no significan necesariamente que no hubiera actividad.
+
    - Cada meta o show de la cronología del período se puede borrar de forma
      individual. La acción pide confirmación, elimina el registro del
      historial y no recalcula las métricas agregadas. Antes de borrar, hay

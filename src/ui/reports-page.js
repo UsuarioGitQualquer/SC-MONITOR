@@ -31,6 +31,7 @@ import {
   WEEKDAY_NAMES,
 } from "./report-data.js";
 import {
+  buildReportEmptyState,
   buildDailyReportHtml,
   buildPeriodReportHtml,
   buildSessionReportHtml,
@@ -183,7 +184,7 @@ function refreshLocalStorageSummary(modelBytes = null) {
 }
 
 function emptyState(message) {
-  elements.workspace.innerHTML = `<div class="empty-state">${message}</div>`;
+  elements.workspace.innerHTML = buildReportEmptyState(message);
 }
 
 function entriesForModel(modelId) {
@@ -384,7 +385,7 @@ async function renderDayReport(modelId) {
   if (elements.mode.value === "session") {
     if (!selectedSession) {
       currentReport = null;
-      elements.workspace.innerHTML = `<div class="empty-state">Não há lives registradas para esta data.</div>`;
+      elements.workspace.innerHTML = buildReportEmptyState("Não há lives registradas para esta data.");
       setStatus(`${report.modelName} · ${report.dateBr} · sem lives registradas`);
       return;
     }

@@ -558,6 +558,7 @@ test("aggregates period metrics, hourly bars, weekdays, users, and leagues", () 
     [dateKeys[0]]: {
       date: dateKeys[0],
       netDaySeconds: 3600,
+      bruteDaySeconds: 5400,
       totalTokensDay: 100,
       peakViewersDay: 10,
       viewerSum: 20,
@@ -580,6 +581,9 @@ test("aggregates period metrics, hourly bars, weekdays, users, and leagues", () 
           tokens: 60,
           viewersSum: 6,
           viewerSamples: 1,
+          tokensUsersSum: 4,
+          tokensUsersSamples: 2,
+          tokensUsersPeak: 4,
           listedUsersSum: 8,
           listedUsersSamples: 2,
         },
@@ -666,6 +670,7 @@ test("aggregates period metrics, hourly bars, weekdays, users, and leagues", () 
     [dateKeys[1]]: {
       date: dateKeys[1],
       netDaySeconds: 1800,
+      bruteDaySeconds: 3600,
       peakViewersDay: 7,
       viewerSum: 0,
       viewerSamplesCount: 0,
@@ -687,6 +692,9 @@ test("aggregates period metrics, hourly bars, weekdays, users, and leagues", () 
           tokens: 50,
           viewersSum: 8,
           viewerSamples: 2,
+          tokensUsersSum: 9,
+          tokensUsersSamples: 3,
+          tokensUsersPeak: 6,
           listedUsersSum: 12,
           listedUsersSamples: 3,
         },
@@ -757,6 +765,8 @@ test("aggregates period metrics, hourly bars, weekdays, users, and leagues", () 
   assert.equal(summary.totalPeriodTokens, 150);
   assert.equal(summary.activeDays, 2);
   assert.equal(summary.avgPerActiveDay, 75);
+  assert.equal(summary.periodBruteSeconds, 9000);
+  assert.deepEqual(summary.bruteDurationDayBars.map((bar) => bar.value), [150]);
   assert.equal(summary.periodAvgViewers, 7);
   assert.deepEqual(summary.bestDay, { dateBr: "05/01/2026", tokens: 100 });
   assert.equal(summary.maxPeak, 12);
@@ -764,7 +774,22 @@ test("aggregates period metrics, hourly bars, weekdays, users, and leagues", () 
   assert.equal(summary.chartBars.length, 1);
   assert.equal(summary.chartBars[0].value, 150);
   assert.equal(summary.hourlyBars[10].value, 110);
+  assert.deepEqual(summary.tokensUsersHourBars, [{
+    label: "10h",
+    value: 3,
+    tooltip: "10h: média de 3 usuários com tokens",
+  }]);
+  assert.deepEqual(summary.tokensUsersPeakHourBars, [{
+    label: "10h",
+    value: 6,
+    tooltip: "10h: pico de 6 usuários com tokens",
+  }]);
   assert.match(summary.hourlyBars[10].tooltip, /Média 5 viewers/);
+  assert.equal(summary.dailyAudienceBars.length, 2);
+  assert.deepEqual(
+    summary.dailyAudienceBars.map((bar) => [bar.avgViewers, bar.peakViewers]),
+    [[10, 10], [4, 12]],
+  );
   assert.deepEqual(summary.audienceHourBars.map((bar) => bar.value), [5, 14]);
   assert.deepEqual(summary.listedUsersHourBars, [{
     label: "10h",
@@ -788,6 +813,10 @@ test("aggregates period metrics, hourly bars, weekdays, users, and leagues", () 
   assert.equal(summary.bestLiveByTokens.tokens, 100);
   assert.equal(summary.bestLiveByPace.label, "06/01 18:00");
   assert.equal(summary.bestLiveByPace.tokensPerHour, 90);
+  assert.deepEqual(summary.dailyPaceBars.map((bar) => bar.value), [100, 100]);
+  assert.equal(summary.weekdayPaceBars.length, 2);
+  assert.equal(summary.weekdayPaceBars[0].value, 100);
+  assert.equal(summary.hourlyPaceBars.find((bar) => bar.label === "10h")?.value, 3300);
   assert.equal(summary.audienceDays, 2);
   assert.deepEqual(summary.audienceConversion, {
     days: 2,

@@ -1741,6 +1741,8 @@ export function createUI(handlers = {}) {
 
   launch = document.createElement("button");
   launch.id = "scm-launch";
+  launch.setAttribute("aria-label", "Abrir painel do SC Monitor");
+  launch.title = "Abrir painel do SC Monitor";
   launch.style.cssText =
     "position: fixed; bottom: 52px; right: 15px; z-index: 999999; background: linear-gradient(135deg, #ff2a6d 0%, #8a2be2 100%); color: #fff; border: 0; padding: 16px 20px; border-radius: 99px; font-weight: bold; cursor: move; box-shadow: 0 6px 24px rgba(255,42,109,0.5); transition: transform 0.2s;";
   launch.textContent = "📊";
@@ -1908,10 +1910,20 @@ export function createUI(handlers = {}) {
         display: flex; background: #14162e; border-bottom: 1px solid #272952; flex-shrink: 0; overflow-x: auto;
       }
       #scm-panel .scm-tab-btn {
-        flex: 1; padding: 10px 8px; border: none; background: transparent; color: #8b92b8; font-size: 11px;
+        display: flex; flex: 1; align-items: center; justify-content: center; gap: 5px; padding: 10px 7px; border: none; background: transparent; color: #8b92b8; font-size: 11px;
         font-weight: 600; cursor: pointer; text-align: center; white-space: nowrap; transition: all 0.2s;
       }
       #scm-panel .scm-tab-btn:hover { color: #fff; background: rgba(255,255,255,0.03); }
+      #scm-panel .scm-tab-btn svg {
+        width: 15px;
+        height: 15px;
+        flex: 0 0 15px;
+        fill: none;
+        stroke: currentColor;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: 1.6;
+      }
       #scm-panel .scm-tab-btn:focus-visible,
       #scm-panel button:focus-visible,
       #scm-panel input:focus-visible,
@@ -1921,6 +1933,197 @@ export function createUI(handlers = {}) {
       }
       #scm-panel .body { padding: 16px; overflow-y: auto !important; flex: 1; background: #0f1024; }
       #scm-panel .scm-tab-content { display: none; }
+      #scm-panel #scm-report-workspace .report-chart-group {
+        --chart-group-accent: #38bdf8;
+        margin: 4px 0 16px;
+      }
+      #scm-panel #scm-report-workspace .report-chart-group--gains { --chart-group-accent: #fbbf24; }
+      #scm-panel #scm-report-workspace .report-chart-group--lives { --chart-group-accent: #a78bfa; }
+      #scm-panel #scm-report-workspace .report-chart-group--events { --chart-group-accent: #fb7185; }
+      #scm-panel #scm-report-workspace .report-chart-group--activity { --chart-group-accent: #22d3ee; }
+      #scm-panel #scm-report-workspace .report-chart-group--comparison { --chart-group-accent: #34d399; }
+      #scm-panel #scm-report-workspace .report-chart-group--moderation { --chart-group-accent: #f87171; }
+      #scm-panel #scm-report-workspace .report-chart-group-heading {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        margin-bottom: 9px;
+        padding: 3px 1px 9px;
+        border-bottom: 1px solid rgba(149, 160, 220, 0.18);
+      }
+      #scm-panel #scm-report-workspace .report-chart-group-icon {
+        display: grid;
+        width: 30px;
+        height: 30px;
+        flex: 0 0 30px;
+        place-items: center;
+        border: 1px solid rgba(149, 160, 220, 0.2);
+        border-radius: 9px;
+        background: rgba(149, 160, 220, 0.08);
+        color: var(--chart-group-accent);
+      }
+      #scm-panel #scm-report-workspace .report-chart-group-icon svg {
+        width: 17px;
+        height: 17px;
+        fill: none;
+        stroke: currentColor;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: 1.7;
+      }
+      #scm-panel #scm-report-workspace .report-chart-group-heading h2 {
+        margin: 0;
+        color: #f8fafc;
+        font-size: 12px;
+      }
+      #scm-panel #scm-report-workspace .report-chart-group-heading p {
+        margin: 2px 0 0;
+        color: #9da8d0;
+        font-size: 9px;
+      }
+      #scm-panel #scm-report-workspace .report-hero {
+        display: grid;
+        grid-template-columns: 42px minmax(0, 1fr);
+        align-items: center;
+        gap: 9px;
+        margin: 0 0 10px;
+        padding: 11px;
+        border: 1px solid rgba(0, 229, 255, 0.2);
+        border-left: 3px solid #00e5ff;
+        border-radius: 13px;
+        background: linear-gradient(120deg, #1b2140, #171a31 72%);
+      }
+      #scm-panel #scm-report-workspace .report-hero-avatar {
+        display: grid;
+        width: 40px;
+        height: 40px;
+        place-items: center;
+        border: 1px solid rgba(0, 229, 255, 0.5);
+        border-radius: 12px;
+        background: rgba(0, 229, 255, 0.08);
+        color: #72e8ff;
+      }
+      #scm-panel #scm-report-workspace .report-hero-copy {
+        min-width: 0;
+      }
+      #scm-panel #scm-report-workspace .report-hero-eyebrow {
+        display: block;
+        margin-bottom: 2px;
+        color: #aab3d6;
+        font-size: 8px;
+        font-weight: 800;
+        letter-spacing: 0.8px;
+        text-transform: uppercase;
+      }
+      #scm-panel #scm-report-workspace .report-hero h2 {
+        margin: 0;
+        color: #f8fafc;
+        font-size: 15px;
+        overflow-wrap: anywhere;
+      }
+      #scm-panel #scm-report-workspace .report-hero-copy p {
+        margin: 3px 0 0;
+        color: #9da8d0;
+        font-size: 9px;
+      }
+      #scm-panel #scm-report-workspace .report-hero-badges {
+        display: flex;
+        grid-column: 1 / -1;
+        flex-wrap: wrap;
+        gap: 5px;
+      }
+      #scm-panel #scm-report-workspace .report-hero-badge {
+        padding: 4px 7px;
+        border: 1px solid #353970;
+        border-radius: 99px;
+        background: #252950;
+        color: #cbd5e1;
+        font-size: 9px;
+        font-weight: 700;
+      }
+      #scm-panel #scm-report-workspace .report-summary-strip {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 7px;
+        margin-bottom: 10px;
+      }
+      #scm-panel #scm-report-workspace .report-summary-item {
+        position: relative;
+        min-width: 0;
+        min-height: 75px;
+        overflow: hidden;
+        padding: 10px 11px;
+        border: 1px solid rgba(149, 160, 220, 0.16);
+        border-radius: 12px;
+        background: linear-gradient(145deg, rgba(32, 36, 70, 0.94), rgba(20, 23, 47, 0.96));
+      }
+      #scm-panel #scm-report-workspace .report-summary-item small,
+      #scm-panel #scm-report-workspace .report-summary-item > span:not(.report-summary-icon) {
+        display: block;
+        color: #9da8d0;
+        font-size: 9px;
+        line-height: 1.35;
+      }
+      #scm-panel #scm-report-workspace .report-summary-item small {
+        padding-right: 28px;
+      }
+      #scm-panel #scm-report-workspace .report-summary-item strong {
+        display: block;
+        margin: 6px 0 3px;
+        color: #67e8f9;
+        font-size: 14px;
+        line-height: 1.1;
+        overflow-wrap: anywhere;
+      }
+      #scm-panel #scm-report-workspace .report-summary-icon {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        display: grid;
+        width: 25px;
+        height: 25px;
+        place-items: center;
+        border: 1px solid rgba(34, 211, 238, 0.22);
+        border-radius: 8px;
+        background: rgba(34, 211, 238, 0.09);
+        color: #67e8f9;
+      }
+      #scm-panel #scm-report-workspace .report-summary-icon svg {
+        width: 15px;
+        height: 15px;
+        fill: none;
+        stroke: currentColor;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: 1.6;
+      }
+      #scm-panel #scm-report-workspace .empty-state {
+        display: grid;
+        min-height: 140px;
+        justify-items: center;
+        align-content: center;
+        gap: 8px;
+        padding: 18px;
+        border: 1px dashed rgba(149, 160, 220, 0.3);
+        border-radius: 14px;
+        background: rgba(24, 27, 55, 0.52);
+        color: #aab3d6;
+        text-align: center;
+      }
+      #scm-panel #scm-report-workspace .empty-state-art {
+        width: 58px;
+        height: 44px;
+        fill: none;
+        stroke: #67e8f9;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: 1.7;
+      }
+      #scm-panel #scm-report-workspace .empty-state-art rect {
+        fill: rgba(34, 211, 238, 0.06);
+        stroke: rgba(103, 232, 249, 0.6);
+      }
+      #scm-panel #scm-report-workspace .empty-state p { margin: 0; line-height: 1.5; }
       #scm-panel .cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 14px; }
       #scm-panel .card, #scm-panel .scm-cyber-card {
         background: #181a36; 
@@ -1930,6 +2133,56 @@ export function createUI(handlers = {}) {
         flex-direction: column; 
         border: 1px solid #272952; 
         box-shadow: 0 8px 20px rgba(0,0,0,0.3); 
+      }
+      #scm-panel .scm-metric-card {
+        min-height: 66px;
+        padding: 9px 12px;
+        overflow: hidden;
+      }
+      #scm-panel .scm-metric-heading {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 5px;
+      }
+      #scm-panel .scm-metric-heading small {
+        min-width: 0;
+        margin-bottom: 0;
+      }
+      #scm-panel .scm-metric-icon {
+        display: flex;
+        width: 22px;
+        height: 22px;
+        flex: 0 0 22px;
+        align-items: center;
+        justify-content: flex-start;
+        margin: 0;
+        color: #67e8f9;
+      }
+      #scm-panel .scm-metric-icon svg {
+        width: 21px;
+        height: 21px;
+        fill: none;
+        stroke: currentColor;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: 1.8;
+      }
+      #scm-panel .scm-metric-icon--green { color: #34d399; }
+      #scm-panel .scm-metric-icon--pink { color: #ff2a6d; }
+      #scm-panel .scm-metric-icon--purple { color: #a855f7; }
+      #scm-panel .scm-metric-icon--blue { color: #22b8ff; }
+      #scm-panel .scm-metric-icon--yellow { color: #facc15; }
+      #scm-panel .scm-metric-icon--red { color: #ff5b62; }
+      #scm-panel .scm-metric-icon--muted { color: #8b92a8; }
+      #scm-panel .scm-metric-card--inline {
+        min-height: 0;
+        gap: 8px;
+      }
+      #scm-panel .scm-metric-card--inline .scm-metric-heading {
+        flex: 1;
+        margin: 0;
       }
       #scm-panel #scm-report-workspace > .scm-cyber-card,
       #scm-panel #scm-report-workspace > .report-card,

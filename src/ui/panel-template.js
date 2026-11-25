@@ -27,12 +27,12 @@ export function buildPanelHtml({ headerDate, footerDate, fanClubPrices = {}, sho
     </div>
 
     <div class="tabs-nav">
-      <button class="scm-tab-btn" data-tab="general">📊 Geral</button>
-      <button class="scm-tab-btn" data-tab="users">👥 Usuários</button>
-      <button class="scm-tab-btn" data-tab="events">💰 Eventos</button>
-      <button class="scm-tab-btn" data-tab="moderation">🛡️ Moderação</button>
-      <button class="scm-tab-btn" data-tab="history">🗂️ Histórico</button>
-      <button class="scm-tab-btn" data-tab="report">📑 Relatório</button>
+      <button class="scm-tab-btn" data-tab="general"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1.5"></rect><rect x="14" y="3" width="7" height="5" rx="1.5"></rect><rect x="14" y="11" width="7" height="10" rx="1.5"></rect><rect x="3" y="14" width="8" height="7" rx="1.5"></rect></svg>Geral</button>
+      <button class="scm-tab-btn" data-tab="users"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"></circle><path d="M3.5 19v-1.5a5.5 5.5 0 0 1 11 0V19zM16 5.5a3 3 0 0 1 0 5.8M17 14a4.5 4.5 0 0 1 3.5 4.5V19h-4"></path></svg>Usuários</button>
+      <button class="scm-tab-btn" data-tab="events"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M15.5 8.5c-.7-.7-1.7-1-3-1-1.6 0-2.7.8-2.7 2 0 3 5.4 1.2 5.4 4.3 0 1.3-1.2 2.2-2.9 2.2-1.3 0-2.5-.5-3.3-1.3M12 5.5v13"></path></svg>Eventos</button>
+      <button class="scm-tab-btn" data-tab="moderation"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 20 6v5c0 5-3.4 8.1-8 10-4.6-1.9-8-5-8-10V6z"></path><path d="m8.5 12 2.3 2.3 4.8-5"></path></svg>Moderação</button>
+      <button class="scm-tab-btn" data-tab="history"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5h16v13H4zM7 4h10v3.5M8 11h8m-8 4h6"></path></svg>Histórico</button>
+      <button class="scm-tab-btn" data-tab="report"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l5 5v13H6zM14 3v5h5"></path><path d="M9 17v-3m3 3v-6m3 6v-4"></path></svg>Relatório</button>
     </div>
 
     <div class="body">
@@ -42,16 +42,16 @@ export function buildPanelHtml({ headerDate, footerDate, fanClubPrices = {}, sho
           <div id="scm-status-badge" style="display: flex; justify-content: flex-end; align-items: center;"></div>
         </div>
         <div class="cards">
-          <div class="card" style="background: linear-gradient(135deg, #181a36 0%, #1c254c 100%); border-left: 3px solid #00e5ff;"><small style="color: #00e5ff;">Tokens hoje (gorjetas + shows estimados)</small><strong id="scm-tokens" style="font-size: 18px; color: #fff;">0 tk</strong></div>
-          <div class="card" style="background: linear-gradient(135deg, #1a3114 0%, #204d17 100%); border-left: 3px solid #07af04;"><small style="color: #00ff3c;">Tokens na sessão (gorjetas + shows estimados)</small><strong id="scm-session-tokens" style="font-size: 18px; color: #fff;">0 tk</strong></div>
-          <div class="card"><small>Tempo Bruto (Sessão)</small><strong id="scm-time-brute">00:00:00</strong></div>
-          <div class="card"><small>Tempo Líquido (Sessão)</small><strong id="scm-time-net" style="color: #00e5ff;">00:00:00</strong></div>
-          <div class="card"><small>Espectadores agora</small><strong id="scm-viewers" style="color: #ff7b00;">—</strong></div>
-          <div class="card"><small>Tempo Líquido (Hoje)</small><strong id="scm-time-net-day" style="color: #c084fc;">00:00:00</strong></div>
+          <div class="card scm-metric-card" style="background: linear-gradient(135deg, #181a36 0%, #1c254c 100%); border-left: 3px solid #00e5ff;"><div class="scm-metric-heading"><span class="scm-metric-icon scm-metric-icon--green" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M15.5 8.5c-.7-.7-1.7-1-3-1-1.6 0-2.7.8-2.7 2 0 3 5.4 1.2 5.4 4.3 0 1.3-1.2 2.2-2.9 2.2-1.3 0-2.5-.5-3.3-1.3M12 5.5v13"></path></svg></span><small style="color: #00e5ff;">Tokens hoje (gorjetas + shows estimados)</small></div><strong id="scm-tokens" style="font-size: 18px; color: #fff;">0 tk</strong></div>
+          <div class="card scm-metric-card" style="background: linear-gradient(135deg, #1a3114 0%, #204d17 100%); border-left: 3px solid #07af04;"><div class="scm-metric-heading"><span class="scm-metric-icon scm-metric-icon--green" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M15.5 8.5c-.7-.7-1.7-1-3-1-1.6 0-2.7.8-2.7 2 0 3 5.4 1.2 5.4 4.3 0 1.3-1.2 2.2-2.9 2.2-1.3 0-2.5-.5-3.3-1.3M12 5.5v13"></path></svg></span><small style="color: #00ff3c;">Tokens na sessão (gorjetas + shows estimados)</small></div><strong id="scm-session-tokens" style="font-size: 18px; color: #fff;">0 tk</strong></div>
+          <div class="card scm-metric-card"><div class="scm-metric-heading"><span class="scm-metric-icon scm-metric-icon--purple" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"></circle><path d="M12 9v4l2.5 1.5M9 2h6"></path></svg></span><small>Tempo Bruto (Sessão)</small></div><strong id="scm-time-brute">00:00:00</strong></div>
+          <div class="card scm-metric-card"><div class="scm-metric-heading"><span class="scm-metric-icon scm-metric-icon--purple" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"></circle><path d="M12 9v4l2.5 1.5M9 2h6"></path></svg></span><small>Tempo Líquido (Sessão)</small></div><strong id="scm-time-net" style="color: #00e5ff;">00:00:00</strong></div>
+          <div class="card scm-metric-card"><div class="scm-metric-heading"><span class="scm-metric-icon scm-metric-icon--blue" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"></path><circle cx="12" cy="12" r="2.5"></circle></svg></span><small>Espectadores agora</small></div><strong id="scm-viewers" style="color: #ff7b00;">—</strong></div>
+          <div class="card scm-metric-card"><div class="scm-metric-heading"><span class="scm-metric-icon scm-metric-icon--purple" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"></circle><path d="M12 9v4l2.5 1.5M9 2h6"></path></svg></span><small>Tempo Líquido (Hoje)</small></div><strong id="scm-time-net-day" style="color: #c084fc;">00:00:00</strong></div>
         </div>
         <div class="cards" style="margin-top: -4px;">
-          <div class="card" style="grid-column: span 2; flex-direction: row; justify-content: space-between; align-items: center; padding: 8px 14px;">
-            <small style="margin:0;">Tempo Bruto Acumulado (Hoje)</small>
+          <div class="card scm-metric-card scm-metric-card--inline" style="grid-column: span 2; flex-direction: row; justify-content: space-between; align-items: center; padding: 8px 14px;">
+            <div class="scm-metric-heading"><span class="scm-metric-icon scm-metric-icon--purple" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"></circle><path d="M12 9v4l2.5 1.5M9 2h6"></path></svg></span><small style="margin:0;">Tempo Bruto Acumulado (Hoje)</small></div>
             <strong id="scm-time-brute-day" style="margin:0; font-size: 13px;">00:00:00</strong>
           </div>
         </div>
@@ -81,16 +81,16 @@ export function buildPanelHtml({ headerDate, footerDate, fanClubPrices = {}, sho
 
       <div id="scm-tab-users" class="scm-tab-content">
         <div class="cards" style="margin-bottom: 10px;">
-          <div class="card" style="border-left: 3px solid #ff2a6d;"><small>Pico observado hoje</small><strong id="scm-peak">0</strong></div>
-          <div class="card" style="border-left: 3px solid #00e5ff;"><small>Média espectadores hoje</small><strong id="scm-avg">0</strong></div>
-          <div class="card"><small>Listados</small><strong id="scm-users">0</strong></div>
-          <div class="card"><small>Outros</small><strong id="scm-others">0</strong></div>
-          <div class="card"><small>Com Tokens</small><strong id="scm-tokens-users" style="color:#00e5ff;">0</strong></div>
-          <div class="card"><small>Ultimate</small><strong id="scm-ultimate-users" style="color:#ff2a6d;">0</strong></div>
-          <div class="card"><small>Invisíveis</small><strong id="scm-invisible-users">0</strong></div>
-          <div class="card"><small>Mais (+)</small><strong id="scm-more-users">0</strong></div>
-          <div class="card" style="border-left: 3px solid #00e5ff;"><small>🆕 Novos (Hoje)</small><strong id="scm-new-users" style="color: #00e5ff;">0</strong></div>
-          <div class="card" style="border-left: 3px solid #8a2be2;"><small>🔁 Recorrentes (Hoje)</small><strong id="scm-returning-users" style="color: #c084fc;">0</strong></div>
+          <div class="card scm-metric-card" style="border-left: 3px solid #ff2a6d;"><div class="scm-metric-heading"><span class="scm-metric-icon scm-metric-icon--pink" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 19V5m0 14h16"></path><path d="m7 15 4-4 3 2 5-6"></path></svg></span><small>Pico observado hoje</small></div><strong id="scm-peak">0</strong></div>
+          <div class="card scm-metric-card" style="border-left: 3px solid #00e5ff;"><div class="scm-metric-heading"><span class="scm-metric-icon scm-metric-icon--purple" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 12h4l3-7 4 14 3-7h4"></path></svg></span><small>Média espectadores hoje</small></div><strong id="scm-avg">0</strong></div>
+          <div class="card scm-metric-card"><div class="scm-metric-heading"><span class="scm-metric-icon scm-metric-icon--blue" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"></circle><path d="M3.5 19v-1.5a5.5 5.5 0 0 1 11 0V19zM16 5.5a3 3 0 0 1 0 5.8M17 14a4.5 4.5 0 0 1 3.5 4.5V19h-4"></path></svg></span><small>Listados</small></div><strong id="scm-users">0</strong></div>
+          <div class="card scm-metric-card"><div class="scm-metric-heading"><span class="scm-metric-icon scm-metric-icon--muted" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"></circle><path d="M3.5 19v-1.5a5.5 5.5 0 0 1 11 0V19"></path></svg></span><small>Outros</small></div><strong id="scm-others">0</strong></div>
+          <div class="card scm-metric-card"><div class="scm-metric-heading"><span class="scm-metric-icon scm-metric-icon--yellow" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="5"></circle><circle cx="16" cy="16" r="5"></circle><path d="M8 5.5v5M6.5 7h3M16 13.5v5m-1.5-3.5h3"></path></svg></span><small>Com Tokens</small></div><strong id="scm-tokens-users" style="color:#00e5ff;">0</strong></div>
+          <div class="card scm-metric-card"><div class="scm-metric-heading"><span class="scm-metric-icon scm-metric-icon--red" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m4 7 4 3 4-5 4 5 4-3-2 12H6z"></path><path d="M8 15h8"></path></svg></span><small>Ultimate</small></div><strong id="scm-ultimate-users" style="color:#ff2a6d;">0</strong></div>
+          <div class="card scm-metric-card"><div class="scm-metric-heading"><span class="scm-metric-icon scm-metric-icon--purple" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"></path><circle cx="12" cy="12" r="2.5"></circle></svg></span><small>Invisíveis</small></div><strong id="scm-invisible-users">0</strong></div>
+          <div class="card scm-metric-card"><div class="scm-metric-heading"><span class="scm-metric-icon scm-metric-icon--muted" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"></circle><path d="M3.5 19v-1.5a5.5 5.5 0 0 1 11 0V19zM18 8v6m-3-3h6"></path></svg></span><small>Mais (+)</small></div><strong id="scm-more-users">0</strong></div>
+          <div class="card scm-metric-card" style="border-left: 3px solid #00e5ff;"><div class="scm-metric-heading"><span class="scm-metric-icon scm-metric-icon--green" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"></circle><path d="M3.5 19v-1.5a5.5 5.5 0 0 1 11 0V19zM18 8v6m-3-3h6"></path></svg></span><small>Novos (Hoje)</small></div><strong id="scm-new-users" style="color: #00e5ff;">0</strong></div>
+          <div class="card scm-metric-card" style="border-left: 3px solid #8a2be2;"><div class="scm-metric-heading"><span class="scm-metric-icon scm-metric-icon--purple" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5"></path><path d="M6.1 9a7 7 0 0 1 11.6-2L20 12M4 12l2.3 5a7 7 0 0 0 11.6-2"></path></svg></span><small>Recorrentes (Hoje)</small></div><strong id="scm-returning-users" style="color: #c084fc;">0</strong></div>
         </div>
         <div id="scm-users-audience-step-bar" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px; margin:4px 0 6px;">
           <span style="font-size:10px; color:#8b92b8;">Bloco do gráfico:</span>

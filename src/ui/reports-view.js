@@ -1327,6 +1327,69 @@ export function buildPeriodReportHtml(
       variant: "sunset",
     })
     : "";
+  const weekdayPaceChart = (summary.weekdayPaceBars || []).length > 1
+    ? buildInteractiveBarsSvg({
+      title: "Ritmo médio por dia da semana",
+      subtitle: "Tokens por hora líquida acumulada",
+      bars: summary.weekdayPaceBars,
+      showCumulative: false,
+      unitLabel: " tk/h",
+      variant: "mint",
+    })
+    : "";
+  const dailyAudienceBars = Array.isArray(summary.dailyAudienceBars)
+    ? summary.dailyAudienceBars
+    : [];
+  const dailyAudienceComparisonChart = dailyAudienceBars.length > 0
+    ? buildCombinedAudienceEarningsChart({
+      title: "Pico e média de espectadores por dia",
+      subtitle: "Linha: média • barras: pico diário",
+      audiencePoints: dailyAudienceBars.map((bar) => ({
+        label: bar.label,
+        value: bar.avgViewers,
+        tooltip: bar.tooltip,
+      })),
+      earningsBars: dailyAudienceBars.map((bar) => ({
+        label: bar.label,
+        value: bar.peakViewers,
+        tooltip: `${bar.label}: pico de ${bar.peakViewers} espectadores`,
+      })),
+    })
+    : "";
+  const dailyPeakAudienceChart = dailyAudienceBars.length > 0
+    ? buildInteractiveBarsSvg({
+      title: "Picos de espectadores por dia",
+      subtitle: `${dailyAudienceBars.length} dia(s) com dados`,
+      bars: dailyAudienceBars.map((bar) => ({
+        label: bar.label,
+        value: bar.peakViewers,
+        tooltip: `${bar.label}: pico de ${bar.peakViewers} espectadores`,
+      })),
+      showCumulative: false,
+      unitLabel: " espectadores",
+      variant: "rose",
+    })
+    : "";
+  const dailyPaceChart = (summary.dailyPaceBars || []).length > 0
+    ? buildInteractiveBarsSvg({
+      title: "Ritmo de ganhos por dia",
+      subtitle: "Tk/h normalizados pelo tempo líquido",
+      bars: summary.dailyPaceBars,
+      showCumulative: false,
+      unitLabel: " tk/h",
+      variant: "sunset",
+    })
+    : "";
+  const hourlyPaceChart = (summary.hourlyPaceBars || []).length > 0
+    ? buildInteractiveBarsSvg({
+      title: "Ritmo de ganhos por horário",
+      subtitle: "Média de tk/h por hora ativa",
+      bars: summary.hourlyPaceBars,
+      showCumulative: false,
+      unitLabel: " tk/h",
+      variant: "default",
+    })
+    : "";
   const weekdayRows = summary.weekdayStats.map((day) => `
     <tr>
       <td>${clean(day.name)}</td>
@@ -1372,6 +1435,26 @@ export function buildPeriodReportHtml(
       variant: "mint",
     })
     : "";
+  const tokensUsersHourChart = summary.tokensUsersHourBars?.length
+    ? buildInteractiveBarsSvg({
+      title: "Média de usuários com tokens por horário",
+      subtitle: "Média ponderada pelas amostras do período",
+      bars: summary.tokensUsersHourBars,
+      showCumulative: false,
+      unitLabel: " usuários",
+      variant: "rose",
+    })
+    : "";
+  const tokensUsersPeakHourChart = summary.tokensUsersPeakHourBars?.length
+    ? buildInteractiveBarsSvg({
+      title: "Pico de usuários com tokens por horário",
+      subtitle: "Maior contagem registrada em cada hora",
+      bars: summary.tokensUsersPeakHourBars,
+      showCumulative: false,
+      unitLabel: " usuários",
+      variant: "amber",
+    })
+    : "";
   const liveSessionRows = Array.isArray(summary.liveSessionRows)
     ? summary.liveSessionRows
     : [];
@@ -1410,6 +1493,21 @@ export function buildPeriodReportHtml(
       })),
     })
     : "";
+  const bruteDurationDayChart = buildInteractiveBarsSvg({
+    title: summary.isWeekly
+      ? "Tempo bruto de live por semana"
+      : summary.isMonthly
+        ? "Tempo bruto de live por mês"
+        : "Tempo bruto de live por dia",
+    subtitle: `${summary.bruteDurationDayBars?.length || 0} intervalo(s)`,
+    bars: (summary.bruteDurationDayBars || []).map((bar) => ({
+      ...bar,
+      displayValue: formatReportDuration(Math.round(Number(bar.value) || 0) * 60),
+    })),
+    showCumulative: false,
+    unitLabel: "min",
+    variant: "amber",
+  });
   const durationDayChart = buildInteractiveBarsSvg({
     title: summary.isWeekly
       ? "Tempo líquido de live por semana"
@@ -1674,13 +1772,11 @@ export function buildPeriodReportHtml(
         bars: summary.chartBars,
         variant: "sunset",
       })}
-      ${buildInteractiveBarsSvg({
-        title: "Evolução de tokens",
-        subtitle: "Tendência no período",
-        bars: summary.chartBars,
-        showCumulative: false,
-        variant: "rose",
-      })}
+      ${weekdayPaceChart}
+      ${dailyPaceChart}
+      ${hourlyPaceChart}
+      ${dailyAudienceComparisonChart}
+      ${dailyPeakAudienceChart}
       ${buildInteractiveBarsSvg({
         title: "Tokens por horário",
         subtitle: "Acumulado no período",
@@ -1691,6 +1787,9 @@ export function buildPeriodReportHtml(
       ${weekdayTokenChart}
       ${audienceHourChart}
       ${listedUsersHourChart}
+      ${tokensUsersHourChart}
+      ${tokensUsersPeakHourChart}
+      ${bruteDurationDayChart}
       ${durationDayChart}
       ${liveDurationChart}
       ${liveTokenChart}

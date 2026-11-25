@@ -23,6 +23,24 @@ test("renders selectable time blocks with the active value and adaptive interval
   assert.match(html, /Intervalo do fluxo/);
 });
 
+test("can display every hourly label on a dense chart", () => {
+  const bars = Array.from({ length: 24 }, (_, hour) => ({
+    label: `${String(hour).padStart(2, "0")}h`,
+    value: hour === 20 ? 10 : 0,
+  }));
+  const html = buildInteractiveBarsSvg({
+    title: "Tokens por horário",
+    bars,
+    showAllLabels: true,
+  });
+  const axisLabels = html.match(/<text[^>]*y="118"[^>]*>[^<]+<\/text>/g) || [];
+
+  assert.equal(axisLabels.length, 24);
+  for (const bar of bars) {
+    assert.match(html, new RegExp(`>${bar.label}</text>`));
+  }
+});
+
 test("renders a bounded donut gauge and escapes its labels", () => {
   const html = buildNeonDonutGauge({
     label: "<tokens>",

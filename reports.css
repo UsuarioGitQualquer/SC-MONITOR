@@ -263,6 +263,15 @@ select {
   min-width: 0;
 }
 
+.page-header-art {
+  display: block;
+  width: 92px;
+  height: 58px;
+  flex: 0 0 auto;
+  margin-left: 12px;
+  filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.22));
+}
+
 .eyebrow {
   display: flex;
   align-items: center;
@@ -741,6 +750,10 @@ button.danger {
   box-shadow: 0 0 18px rgba(0, 229, 255, 0.12);
 }
 
+.report-hero-avatar svg {
+  display: block;
+}
+
 .report-hero-copy {
   min-width: 0;
 }
@@ -835,8 +848,10 @@ button.danger {
 }
 
 .report-summary-item {
+  position: relative;
   min-width: 0;
   min-height: 106px;
+  overflow: hidden;
   padding: 17px 16px;
   border: 1px solid var(--panel-border);
   border-radius: 17px;
@@ -853,11 +868,39 @@ button.danger {
 }
 
 .report-summary-item small,
-.report-summary-item span {
+.report-summary-item span:not(.report-summary-icon) {
   display: block;
   color: #9da8d0;
   font-size: 10px;
   line-height: 1.35;
+}
+
+.report-summary-item small {
+  padding-right: 38px;
+}
+
+.report-summary-icon {
+  position: absolute;
+  top: 13px;
+  right: 13px;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--summary-color, #22d3ee) 24%, transparent);
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--summary-color, #22d3ee) 10%, transparent);
+  color: var(--summary-color, #22d3ee);
+}
+
+.report-summary-icon svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.6;
 }
 
 .report-summary-item strong {
@@ -995,6 +1038,87 @@ button.danger {
   gap: 16px;
   align-items: start;
   margin-bottom: 16px;
+}
+
+.report-chart-group {
+  --chart-group-accent: #38bdf8;
+  margin: 4px 0 24px;
+}
+
+.report-chart-group--gains {
+  --chart-group-accent: #fbbf24;
+}
+
+.report-chart-group--lives {
+  --chart-group-accent: #a78bfa;
+}
+
+.report-chart-group--events {
+  --chart-group-accent: #fb7185;
+}
+
+.report-chart-group--activity {
+  --chart-group-accent: #22d3ee;
+}
+
+.report-chart-group--comparison {
+  --chart-group-accent: #34d399;
+}
+
+.report-chart-group--moderation {
+  --chart-group-accent: #f87171;
+}
+
+.report-chart-group-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 4px 2px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--chart-group-accent) 24%, transparent);
+}
+
+.report-chart-group-icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--chart-group-accent) 36%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--chart-group-accent) 12%, transparent);
+  color: var(--chart-group-accent);
+}
+
+.report-chart-group-icon svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.report-chart-group-heading h2 {
+  margin: 0;
+  color: #f8fafc;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.report-chart-group-heading p {
+  margin: 3px 0 0;
+  color: #9da8d0;
+  font-size: 11px;
+}
+
+.report-chart-group .chart-grid {
+  margin-bottom: 0;
+}
+
+.report-chart-group--activity .chart-grid {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .chart-grid > .scm-cyber-card {
@@ -1366,12 +1490,39 @@ tbody tr:hover {
 }
 
 .empty-state {
-  padding: 42px 20px;
+  display: grid;
+  min-height: 170px;
+  justify-items: center;
+  align-content: center;
+  gap: 10px;
+  padding: 28px 20px;
   border: 1px dashed rgba(149, 160, 220, 0.3);
   border-radius: 18px;
   background: rgba(24, 27, 55, 0.52);
   color: #aab3d6;
   text-align: center;
+}
+
+.empty-state-art {
+  width: 68px;
+  height: 52px;
+  fill: none;
+  stroke: #67e8f9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+  filter: drop-shadow(0 0 8px rgba(34, 211, 238, 0.18));
+}
+
+.empty-state-art rect {
+  fill: rgba(34, 211, 238, 0.06);
+  stroke: rgba(103, 232, 249, 0.6);
+}
+
+.empty-state p {
+  max-width: 560px;
+  margin: 0;
+  line-height: 1.6;
 }
 
 @media (max-width: 1050px) {
@@ -1383,6 +1534,7 @@ tbody tr:hover {
   .report-summary-strip {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+
 }
 
 @media (max-width: 800px) {
@@ -1392,6 +1544,10 @@ tbody tr:hover {
 
   .report-summary-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .page-header-art {
+    display: none;
   }
 
   .report-hero {

@@ -178,6 +178,63 @@ COMPARAÇÃO POR DIA DA SEMANA E TRANSPARÊNCIA DAS MÉTRICAS
    - O período também oferece mapa de calor dia/hora, linha do tempo de atividade e
      moderação, engajamento por usuário, eficiência da audiência, contribuição por liga
      e histórico combinado de metas e shows.
+
+   COMO LER OS GRÁFICOS DOS RELATÓRIOS
+
+   - A página oferece três visões: Dia, Sessão e Período. Escolha o modelo/sala e
+     os dados disponíveis; no relatório por período, defina as datas e separe os
+     resultados por dia, semana ou mês. Também é possível comparar dois períodos.
+
+   - Nos relatórios de Dia e Sessão, o gráfico combinado mostra tokens por intervalo
+     junto da evolução do público. No relatório diário, marcadores indicam shows
+     registrados. Os gráficos de fluxo detalham tokens e pessoas listadas; escolha
+     o tamanho dos blocos ou use Automático, que ajusta o intervalo à duração.
+     Tokens sem horário registrado são informados à parte e não são distribuídos
+     artificialmente nos blocos.
+
+   - No relatório diário, os gráficos e indicadores de audiência mostram retenção,
+     pico/média de usuários e distribuição por liga. A composição de ganhos agrupa
+     tokens por categoria. Os gráficos de desempenho comparam duração e tokens
+     entre as lives do dia; os rankings mostram maiores gorjetas, opções de menu e
+     resultados de roleta registrados. Tabelas complementares apresentam lives,
+     doadores, suspeitas e usuários silenciados quando há dados.
+
+   - No relatório por Sessão, o gráfico combinado mostra público e ganhos da live
+     nos intervalos selecionados. Também há fluxo de tokens e usuários listados,
+     ganhos por categoria e, quando outra sessão é selecionada para comparação,
+     uma tabela com as principais diferenças.
+
+   - No relatório por Período, “Ganhos por data/semana/mês” soma os tokens em cada
+     agrupamento. “Tokens por horário” reúne os registros do mesmo horário em todo
+     o período; já “Média de tokens por horário” divide esse total pelos dias
+     ativos. Os gráficos de ritmo usam tk/h e consideram o tempo líquido ao vivo.
+     “Maior gorjeta” apresenta o maior valor do agrupamento, não a soma das gorjetas.
+
+   - Os gráficos de público incluem pico e média de espectadores por dia, médias
+     por horário, além de médias de usuários listados e de usuários com tokens por
+     horário, data e dia da semana. Médias horárias de audiência e de usuários
+     listados/com tokens são ponderadas pelas amostras registradas; médias por
+     data ou dia da semana usam os dias com dados. O pico de usuários com tokens
+     por horário é a maior contagem observada naquela hora, não uma média.
+
+   - A área de lives mostra frequência de dias ativos, duração bruta e líquida,
+     tokens e ritmo por live. Os gráficos de novos/recorrentes e doadores mostram
+     a evolução por agrupamento; nas séries de doadores, a mesma pessoa pode
+     aparecer em dias diferentes. A comparação entre períodos exibe médias de
+     tokens e, quando disponíveis, de espectadores.
+
+   - O mapa de calor organiza tokens por dia da semana e hora; a intensidade da
+     cor representa tokens, e o tooltip informa também eventos e público médio.
+     A linha do tempo separa eventos de moderação por hora. As tabelas de
+     engajamento, ligas, doadores e rei da sala complementam esses gráficos com
+     métricas individuais ou totais.
+
+   - Os gráficos de suspeitas e silenciados contam usuários distintos em cada
+     intervalo; não representam uma contagem acumulada de pessoas únicas no
+     período inteiro. Suspeita de bot é uma indicação heurística, não uma
+     confirmação. Gráficos podem aparecer vazios quando não há registros salvos;
+     valores ausentes não significam necessariamente zero atividade.
+
    - Na linha do tempo do período, cada meta e show pode ser apagado individualmente.
      A ação pede confirmação, remove o registro do histórico e não recalcula métricas
      agregadas. É necessário pausar o monitoramento do modelo antes da exclusão.

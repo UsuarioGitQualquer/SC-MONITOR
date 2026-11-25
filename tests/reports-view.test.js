@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildReportEmptyState,
   buildDailyAdditionalMetricsHtml,
   buildDailyReportHtml,
   buildPeriodReportHtml,
@@ -136,7 +137,13 @@ test("renders daily report details and escapes user content", () => {
         showBoundary: "end",
       }],
     },
-    timeBars: [{ label: "14:08", value: 1 }],
+    timeBars: [{
+      label: "14:08",
+      value: 1,
+      avgListedUsers: 4,
+      listedUsersSamples: 1,
+      tooltip: "14:08 - 14:09 (2m): 1 tk",
+    }],
     timeStepMin: 2,
     enableSuspectRemoval: true,
   });
@@ -146,6 +153,8 @@ test("renders daily report details and escapes user content", () => {
   assert.match(html, /&lt;script&gt;/);
   assert.doesNotMatch(html, /<script>/);
   assert.match(html, /report-summary-strip/);
+  assert.equal((html.match(/class="report-summary-icon"/g) || []).length, 6);
+  assert.match(html, /class="report-hero-avatar" aria-hidden="true">\s*<svg/);
   assert.match(html, /Tokens<\/small>/);
   assert.match(html, /Gorjetas<\/small>/);
   assert.match(html, /Mensagens<\/small>/);
@@ -154,6 +163,9 @@ test("renders daily report details and escapes user content", () => {
   assert.match(html, /&lt;King&gt;/);
   assert.match(html, /Chat capturado/);
   assert.match(html, /Ganhos por intervalo/);
+  assert.match(html, /Fluxo de Tokens \(Blocos de 2 min\)/);
+  assert.match(html, /Fluxo de Usuários \(pessoas listadas\)/);
+  assert.match(html, /14:08: 4 pessoas listadas \(média\)/);
   assert.match(html, /Shows/);
   assert.match(html, /Show: Show privado de 10 min/);
   assert.match(html, /Ticket show/);
@@ -182,6 +194,9 @@ test("renders daily report details and escapes user content", () => {
   assert.match(html, /--report-accent:#fbbf24/);
   assert.match(html, /--report-accent:#fb7185/);
   assert.match(html, /Insights do dia/);
+  assert.match(html, /report-chart-group--audience/);
+  assert.match(html, /report-chart-group--gains/);
+  assert.match(html, /report-chart-group--lives/);
   assert.match(html, /principal fonte entre os ganhos classificados \(67%/);
   assert.match(html, /maior gorjeta representou 100% dos tokens do dia/);
   assert.match(html, /tk do total diário não têm horário registrado/);
@@ -196,6 +211,41 @@ test("renders daily report details and escapes user content", () => {
     /<div class="daily-highlight-grid">\s*<section class="report-card report-card--tip">[\s\S]*?<\/section>\s*<section class="report-card report-card--king">/,
   );
   assert.match(html, /&lt;Doador&gt;.*120 tk.*Roleta/);
+});
+
+test("includes zero-token lives in the daily average pace insight", () => {
+  const html = buildDailyReportHtml({
+    report: {
+      modelName: "modelo",
+      dateBr: "20/11/2026",
+      totalTokens: 100,
+      peakViewers: 0,
+      avgViewers: 0,
+      bruteSeconds: 7200,
+      netSeconds: 7200,
+      totalTips: 0,
+      totalMessages: 0,
+      donorRows: [],
+      liveSessions: [
+        { startedAt: "12:00", durationSeconds: 3600, tokens: 0 },
+        { startedAt: "14:00", durationSeconds: 3600, tokens: 100 },
+      ],
+    },
+    daily: {},
+  });
+
+  assert.match(
+    html,
+    /A live 2 teve ritmo 100% acima da média das lives com duração registrada/,
+  );
+});
+
+test("renders illustrated empty report states and escapes their message", () => {
+  const html = buildReportEmptyState("Nenhum dado para <modelo>");
+
+  assert.match(html, /class="empty-state-art"/);
+  assert.match(html, /Nenhum dado para &lt;modelo&gt;/);
+  assert.doesNotMatch(html, /Nenhum dado para <modelo>/);
 });
 
 test("marks the start and end of group shows in the daily chart", () => {
@@ -462,6 +512,20 @@ test("renders period totals and weekday summaries", () => {
     audienceHourBars: [{ label: "14h", value: 18, tooltip: "14h: média de 18 espectadores" }],
     listedUsersHourBars: [{ label: "14h", value: 8, tooltip: "14h: média de 8 usuários listados" }],
     tokensUsersHourBars: [{ label: "14h", value: 5, tooltip: "14h: média de 5 usuários com tokens" }],
+    tokensUsersDayBars: [{
+      label: "18/11",
+      value: 5,
+      tooltip: "18/11: média de 5 usuários com tokens calculada a partir de 2 amostras",
+    }],
+    tokensUsersWeekdayBars: [
+      { label: "Domingo", value: 0, days: 0 },
+      { label: "Segunda", value: 5, days: 1 },
+      { label: "Terça", value: 0, days: 0 },
+      { label: "Quarta", value: 0, days: 0 },
+      { label: "Quinta", value: 0, days: 0 },
+      { label: "Sexta", value: 0, days: 0 },
+      { label: "Sábado", value: 0, days: 0 },
+    ],
     tokensUsersPeakHourBars: [{ label: "14h", value: 9, tooltip: "14h: pico de 9 usuários com tokens" }],
     bruteDurationDayBars: [{ label: "18/11", value: 90, tooltip: "18/11: 01:30:00 brutos" }],
     durationDayBars: [{ label: "18/11", value: 60, tooltip: "18/11: 01:00:00 líquidos" }],
@@ -580,8 +644,12 @@ test("renders period totals and weekday summaries", () => {
   assert.match(html, /Quarta · 16 espectadores/);
   assert.match(html, /Horário com maior média de espectadores/);
   assert.match(html, /Média de espectadores por horário/);
+  assert.match(html, /Média de tokens por horário/);
+  assert.match(html, /14h: média de 10 tk por dia ativo \(30 tk em 3 dias\)/);
   assert.match(html, /Média de usuários listados por horário/);
   assert.match(html, /Média de usuários com tokens por horário/);
+  assert.match(html, /Média de usuários com tokens por dia/);
+  assert.match(html, /Média de usuários com tokens por dia da semana/);
   assert.match(html, /Pico de usuários com tokens por horário/);
   assert.doesNotMatch(html, /Evolução de tokens/);
   const getChartSvg = (title) => {
@@ -591,13 +659,29 @@ test("renders period totals and weekday summaries", () => {
     assert.ok(titleIndex >= 0 && svgStart > titleIndex && svgEnd >= 0);
     return html.slice(svgStart, svgEnd + "</svg>".length);
   };
+  const getChartGroupHtml = (title) => {
+    const titleIndex = html.indexOf(`>${title}</strong>`);
+    const groupStart = html.lastIndexOf('<section class="report-chart-group', titleIndex);
+    const groupEnd = html.indexOf("</section>", groupStart);
+    assert.ok(titleIndex >= 0 && groupStart >= 0 && groupEnd > titleIndex);
+    return html.slice(groupStart, groupEnd);
+  };
+  assert.match(getChartGroupHtml("Tokens por horário"), /Tendências e ganhos/);
+  assert.match(getChartGroupHtml("Média de tokens por horário"), /Tendências e ganhos/);
+  assert.match(getChartGroupHtml("Média de espectadores por horário"), /Público e usuários/);
+  assert.match(getChartGroupHtml("Duração por live no período"), /Lives e duração/);
   for (const title of [
     "Tokens por horário",
+    "Média de tokens por horário",
     "Média de espectadores por horário",
   ]) {
     const svg = getChartSvg(title);
     assert.match(svg, /<rect[^>]*fill="url\(#scm-bargrad-/);
     assert.doesNotMatch(svg, /<path /);
+  }
+  const tokensUsersWeekdaySvg = getChartSvg("Média de usuários com tokens por dia da semana");
+  for (const weekday of ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"]) {
+    assert.match(tokensUsersWeekdaySvg, new RegExp(`>${weekday}</text>`));
   }
   for (const title of ["Duração por live no período", "Tokens por live no período"]) {
     const svg = getChartSvg(title);
@@ -654,6 +738,14 @@ test("renders period totals and weekday summaries", () => {
   assert.doesNotMatch(html, /data-entry-kind="show"/);
   assert.match(html, /Ritmo de ganhos por live/);
   assert.match(html, /Insights · 2026-11-18–2026-11-20 vs\. 2026-11-11–2026-11-17/);
+  assert.match(html, /report-chart-group--gains/);
+  assert.match(html, /report-chart-group--audience/);
+  assert.match(html, /report-chart-group--lives/);
+  assert.match(html, /report-chart-group--comparison/);
+  assert.ok(
+    html.indexOf("Tendências e ganhos") < html.indexOf("Público e usuários") &&
+      html.indexOf("Público e usuários") < html.indexOf("Lives e duração"),
+  );
   assert.match(html, /Comparação da média diária de tokens/);
   assert.match(html, /Comparação da média de espectadores/);
   assert.match(html, /Insights do período/);
@@ -662,7 +754,7 @@ test("renders period totals and weekday summaries", () => {
   assert.match(html, /Dados de público foram registrados em 1 de 3 dias/);
   assert.match(html, /14h concentrou 75% dos tokens contabilizados por hora/);
   assert.match(html, /Quarta teve média diária 20% acima da média de dias ativos/);
-  assert.match(html, /19\/11 11:00 teve ritmo 14% acima da média das lives/);
+  assert.match(html, /19\/11 11:00 teve ritmo 14% acima da média de todas as lives com duração registrada/);
   assert.match(html, /2 tentativa\(s\), 1 confirmada\(s\), 1 falha\(s\) e 0 pendente\(s\)/);
 });
 
@@ -691,6 +783,57 @@ test("identifies the recorded date in period insights", () => {
   const html = buildPeriodReportHtml(summary);
 
   assert.match(html, /Houve registros em 21\/11\/2026 \(1 de 7 dias do período; 14%\)\./);
+  assert.match(html, /Ganhos por data/);
+  assert.match(html, /Média de tokens por dia da semana/);
+  assert.match(html, /Domingo a sábado · vazios = sem registro/);
+  const weekdayChart = html.match(
+    /<strong[^>]*>Média de tokens por dia da semana<\/strong>[\s\S]*?<svg[\s\S]*?<\/svg>/,
+  )?.[0];
+  assert.ok(weekdayChart);
+  for (const weekday of ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"]) {
+    assert.match(weekdayChart, new RegExp(`>${weekday}</text>`));
+  }
+});
+
+test("omits audience comparisons when neither period has viewer samples", () => {
+  const buildEmptySummary = (date) => buildPeriodReportSummary({
+    modelId: "model",
+    modelEntries: [],
+    start: date,
+    end: date,
+    dateKeys: [date],
+  });
+  const html = buildPeriodReportHtml(buildEmptySummary("2026-11-21"), {
+    comparisonSummary: buildEmptySummary("2026-11-20"),
+  });
+  const comparisonInsights = html.match(
+    /<section class="report-card comparison-insights">([\s\S]*?)<\/section>/,
+  )?.[1];
+
+  assert.ok(comparisonInsights);
+  assert.doesNotMatch(comparisonInsights, /Média de espectadores|Pico de espectadores/);
+  assert.doesNotMatch(html, />Comparação da média de espectadores<\/strong>/);
+});
+
+test("includes zero-token sessions in the period average pace insight", () => {
+  const summary = buildPeriodReportSummary({
+    modelId: "model",
+    modelEntries: [],
+    start: "2026-11-21",
+    end: "2026-11-21",
+    dateKeys: ["2026-11-21"],
+  });
+  summary.liveSessionRows = [
+    { label: "Live sem ganhos", durationSeconds: 3600, tokensPerHour: 0, tokens: 0 },
+    { label: "Live melhor", durationSeconds: 3600, tokensPerHour: 100, tokens: 100 },
+  ];
+  summary.bestLiveByPace = { label: "Live melhor", tokensPerHour: 100 };
+  const html = buildPeriodReportHtml(summary);
+
+  assert.match(
+    html,
+    /Live melhor teve ritmo 100% acima da média de todas as lives com duração registrada/,
+  );
 });
 
 test("renders a focused live report with an optional live comparison", () => {
@@ -716,7 +859,13 @@ test("renders a focused live report with an optional live comparison", () => {
       peakViewers: 24,
       avgViewers: 10,
     },
-    timeBars: [],
+    timeBars: [{
+      label: "14:45",
+      value: 25,
+      avgListedUsers: 8,
+      listedUsersSamples: 2,
+      tooltip: "14:45 - 14:49 (5m): 25 tk",
+    }],
     audiencePoints: [],
     timeStepMin: 5,
   });
@@ -731,6 +880,9 @@ test("renders a focused live report with an optional live comparison", () => {
   assert.match(html, /Ganhos em tokens<\/small>\s*<strong>\+34%/);
   assert.match(html, /A média de 12 espectadores equivaleu a 40% do pico de 30/);
   assert.match(html, /Ganhos por intervalo da live/);
+  assert.match(html, /Fluxo de Tokens \(Blocos de 5 min\)/);
+  assert.match(html, /Fluxo de Usuários \(pessoas listadas\)/);
+  assert.match(html, /14:45: 8 pessoas listadas \(média\)/);
 });
 
 test("formats durations as non-negative padded clock values", () => {

@@ -677,22 +677,22 @@ export function buildPeriodAdditionalMetricsHtml(
     : "";
   const suspectRows = Array.isArray(summary.suspectRows) ? summary.suspectRows : [];
   const mutedRows = Array.isArray(summary.mutedRows) ? summary.mutedRows : [];
-  const safetyCharts = suspectRows.length || mutedRows.length
-    ? `
-      ${suspectRows.length ? buildInteractiveBarsSvg({
-        title: `Suspeitas de bots ${groupedTimeLabel}`,
-        subtitle: "Usu\u00e1rios distintos registrados em cada intervalo",
-        bars: summary.suspectBars,
-        variant: "amber",
-      }) : ""}
-      ${mutedRows.length ? buildInteractiveBarsSvg({
-        title: `Silenciados ${groupedTimeLabel}`,
-        subtitle: "Usu\u00e1rios distintos registrados em cada intervalo",
-        bars: summary.mutedBars,
-        variant: "rose",
-      }) : ""}
-    `
-    : "";
+  const safetyCharts = `
+    ${buildInteractiveBarsSvg({
+      title: `Suspeitas de bots ${groupedTimeLabel}`,
+      subtitle: "Usu\u00e1rios distintos registrados em cada intervalo",
+      bars: summary.suspectBars || [],
+      showCumulative: false,
+      variant: "amber",
+    })}
+    ${buildInteractiveBarsSvg({
+      title: `Silenciados ${groupedTimeLabel}`,
+      subtitle: "Usu\u00e1rios distintos registrados em cada intervalo",
+      bars: summary.mutedBars || [],
+      showCumulative: false,
+      variant: "rose",
+    })}
+  `;
   const donors = Array.isArray(summary.donorRows) ? summary.donorRows : [];
   const donorRows = donors.length
     ? `
@@ -1432,12 +1432,14 @@ export function buildPeriodReportHtml(
         title: `Novos usuários ${audienceInterval}`,
         subtitle: `${summary.audienceDays} dia(s) com dados`,
         bars: summary.newUserBars,
+        showCumulative: false,
         variant: "mint",
       })}
       ${buildInteractiveBarsSvg({
         title: `Usuários recorrentes ${audienceInterval}`,
         subtitle: `${summary.audienceDays} dia(s) com dados`,
         bars: summary.returningUserBars,
+        showCumulative: false,
         variant: "violet",
       })}
     `

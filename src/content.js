@@ -1147,6 +1147,7 @@
       liveData.isLiveActive,
       state.listedUsersCount,
       leagueCounts,
+      state.tokensUsersCount,
     );
 
     updatePersistentTimerState();

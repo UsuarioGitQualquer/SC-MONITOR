@@ -750,7 +750,7 @@ export function buildInteractiveBarsSvg({
         <strong style="color:${chartStyle.accent}; font-size:12px;">${clean(title)}</strong>
         <span style="font-size:10px; color:${chartStyle.accent}; background:#222a41; padding:3px 8px; border-radius:99px;">${clean(subtitle || "")}</span>
       </div>
-      <svg viewBox="0 0 ${width} ${height}" style="width:100%; height:auto; display:block;">
+      <svg viewBox="0 0 ${width} ${height}" style="width:100%; max-width:720px; height:auto; display:block; margin:0 auto;">
         <defs>
           <linearGradient id="${barGradId}" x1="0%" y1="0%" x2="0%" y2="100%">
             <stop offset="0%" stop-color="${chartStyle.start}" />

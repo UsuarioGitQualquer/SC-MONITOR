@@ -467,6 +467,7 @@ export function recordMinuteMetric(
   liveActive = true,
   listedUsers = null,
   leagueCounts = null,
+  tokensUsers = null,
 ) {
   const now = new Date();
   const dayKey = localDateKey(now);
@@ -481,6 +482,9 @@ export function recordMinuteMetric(
       viewerSamples: 0,
       listedUsersSum: 0,
       listedUsersSamples: 0,
+      tokensUsersSum: 0,
+      tokensUsersSamples: 0,
+      tokensUsersPeak: 0,
       leagueSums: Object.fromEntries(LEAGUE_COUNT_KEYS.map((key) => [key, 0])),
       leagueSamples: 0,
       netSeconds: 0,
@@ -495,6 +499,16 @@ export function recordMinuteMetric(
   if (listedUsers !== null && listedUsers !== undefined && Number.isFinite(Number(listedUsers))) {
     entry.listedUsersSum += Math.max(0, Number(listedUsers));
     entry.listedUsersSamples += 1;
+  }
+  entry.tokensUsersSum = Number(entry.tokensUsersSum) || 0;
+  entry.tokensUsersSamples = Number(entry.tokensUsersSamples) || 0;
+  if (tokensUsers !== null && tokensUsers !== undefined && Number.isFinite(Number(tokensUsers))) {
+    entry.tokensUsersSum += Math.max(0, Number(tokensUsers));
+    entry.tokensUsersSamples += 1;
+    entry.tokensUsersPeak = Math.max(
+      Number(entry.tokensUsersPeak) || 0,
+      Math.max(0, Number(tokensUsers)),
+    );
   }
   addLeagueCountsSample(entry, leagueCounts);
   if (viewers !== null && viewers !== undefined && !Number.isNaN(Number(viewers))) {
@@ -517,6 +531,9 @@ export function recordMinuteMetric(
         viewerSamples: 0,
         listedUsersSum: 0,
         listedUsersSamples: 0,
+        tokensUsersSum: 0,
+        tokensUsersSamples: 0,
+        tokensUsersPeak: 0,
         leagueSums: Object.fromEntries(LEAGUE_COUNT_KEYS.map((key) => [key, 0])),
         leagueSamples: 0,
         netSeconds: 0,
@@ -530,6 +547,16 @@ export function recordMinuteMetric(
     if (listedUsers !== null && listedUsers !== undefined && Number.isFinite(Number(listedUsers))) {
       sessionEntry.listedUsersSum += Math.max(0, Number(listedUsers));
       sessionEntry.listedUsersSamples += 1;
+    }
+    sessionEntry.tokensUsersSum = Number(sessionEntry.tokensUsersSum) || 0;
+    sessionEntry.tokensUsersSamples = Number(sessionEntry.tokensUsersSamples) || 0;
+    if (tokensUsers !== null && tokensUsers !== undefined && Number.isFinite(Number(tokensUsers))) {
+      sessionEntry.tokensUsersSum += Math.max(0, Number(tokensUsers));
+      sessionEntry.tokensUsersSamples += 1;
+      sessionEntry.tokensUsersPeak = Math.max(
+        Number(sessionEntry.tokensUsersPeak) || 0,
+        Math.max(0, Number(tokensUsers)),
+      );
     }
     addLeagueCountsSample(sessionEntry, leagueCounts);
     if (viewers !== null && viewers !== undefined && !Number.isNaN(Number(viewers))) {
@@ -550,6 +577,9 @@ export function recordMinuteMetric(
         viewerSamples: 0,
         listedUsersSum: 0,
         listedUsersSamples: 0,
+        tokensUsersSum: 0,
+        tokensUsersSamples: 0,
+        tokensUsersPeak: 0,
         leagueSums: Object.fromEntries(LEAGUE_COUNT_KEYS.map((key) => [key, 0])),
         leagueSamples: 0,
         netSeconds: 0,
@@ -563,6 +593,16 @@ export function recordMinuteMetric(
     if (listedUsers !== null && listedUsers !== undefined && Number.isFinite(Number(listedUsers))) {
       preciseEntry.listedUsersSum += Math.max(0, Number(listedUsers));
       preciseEntry.listedUsersSamples += 1;
+    }
+    preciseEntry.tokensUsersSum = Number(preciseEntry.tokensUsersSum) || 0;
+    preciseEntry.tokensUsersSamples = Number(preciseEntry.tokensUsersSamples) || 0;
+    if (tokensUsers !== null && tokensUsers !== undefined && Number.isFinite(Number(tokensUsers))) {
+      preciseEntry.tokensUsersSum += Math.max(0, Number(tokensUsers));
+      preciseEntry.tokensUsersSamples += 1;
+      preciseEntry.tokensUsersPeak = Math.max(
+        Number(preciseEntry.tokensUsersPeak) || 0,
+        Math.max(0, Number(tokensUsers)),
+      );
     }
     addLeagueCountsSample(preciseEntry, leagueCounts);
     if (viewers !== null && viewers !== undefined && !Number.isNaN(Number(viewers))) {

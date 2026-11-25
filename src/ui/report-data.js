@@ -944,14 +944,20 @@ export function buildPeriodReportSummary({
 }) {
   const entryByDate = new Map(modelEntries.map((entry) => [entry.dateKey, entry]));
   const hourlyTokens = Array(24).fill(0);
+  const hourlyNetSeconds = Array(24).fill(0);
   const hourlyViewerSums = Array(24).fill(0);
   const hourlyViewerSamples = Array(24).fill(0);
   const hourlyListedUserSums = Array(24).fill(0);
   const hourlyListedUserSamples = Array(24).fill(0);
+  const hourlyTokensUserSums = Array(24).fill(0);
+  const hourlyTokensUserSamples = Array(24).fill(0);
+  const hourlyTokensUserPeaks = Array(24).fill(0);
   const weekdayStats = WEEKDAY_NAMES.map((name) => ({
     name,
     days: 0,
     tokens: 0,
+    netSeconds: 0,
+    bruteSeconds: 0,
     viewerSum: 0,
     viewerSamples: 0,
     peakViewers: 0,
@@ -982,6 +988,7 @@ export function buildPeriodReportSummary({
   const goalTimeline = [];
   const showTimeline = [];
   let periodNetSeconds = 0;
+  let periodBruteSeconds = 0;
   const heatmap = WEEKDAY_NAMES.map(() => Array.from({ length: 24 }, () => ({
     tokens: 0,
     events: 0,
@@ -1009,6 +1016,9 @@ export function buildPeriodReportSummary({
   const liveSessionRows = [];
   const dayBars = [];
   const durationDayBars = [];
+  const bruteDurationDayBars = [];
+  const dailyPaceBars = [];
+  const dailyAudienceBars = [];
   let totalPeriodTokens = 0;
   let activeDays = 0;
   const activeDayDates = [];
@@ -1034,6 +1044,7 @@ export function buildPeriodReportSummary({
     const entry = entryByDate.get(dateKey);
     const daily = dailyByDate[dateKey] || {};
     periodNetSeconds += Math.max(0, Number(daily.netDaySeconds) || 0);
+    periodBruteSeconds += Math.max(0, Number(daily.bruteDaySeconds) || 0);
     Object.entries(daily.leagueUserTotals || {}).forEach(([key, league]) => {
       if (!league || typeof league !== "object") return;
       const normalized = String(key || league.label || "").trim().toLocaleLowerCase();
@@ -1384,10 +1395,20 @@ export function buildPeriodReportSummary({
       const hour = Number(String(minute?.minute || "").split(":")[0]);
       if (!Number.isInteger(hour) || hour < 0 || hour > 23) return;
       hourlyTokens[hour] += Number(minute.tokens) || 0;
+      hourlyNetSeconds[hour] += Math.max(
+        0,
+        Number(minute.netSeconds) || 60,
+      );
       hourlyViewerSums[hour] += Number(minute.viewersSum) || 0;
       hourlyViewerSamples[hour] += Number(minute.viewerSamples) || 0;
       hourlyListedUserSums[hour] += Number(minute.listedUsersSum) || 0;
       hourlyListedUserSamples[hour] += Number(minute.listedUsersSamples) || 0;
+      hourlyTokensUserSums[hour] += Number(minute.tokensUsersSum) || 0;
+      hourlyTokensUserSamples[hour] += Number(minute.tokensUsersSamples) || 0;
+      hourlyTokensUserPeaks[hour] = Math.max(
+        hourlyTokensUserPeaks[hour],
+        Number(minute.tokensUsersPeak) || 0,
+      );
       const weekday = weekdayIndexFromDateKey(dateKey);
       if (weekday >= 0) {
         heatmap[weekday][hour].tokens += Math.max(0, Number(minute.tokens) || 0);
@@ -1409,6 +1430,8 @@ export function buildPeriodReportSummary({
       const weekday = weekdayStats[weekdayIndex];
       weekday.days += 1;
       weekday.tokens += tokens;
+      weekday.netSeconds += Math.max(0, Number(daily.netDaySeconds) || 0);
+      weekday.bruteSeconds += Math.max(0, Number(daily.bruteDaySeconds) || 0);
       weekday.peakViewers = Math.max(weekday.peakViewers, peakViewers);
 
       let viewerSum = Number(daily.viewerSum) || 0;
@@ -1432,6 +1455,27 @@ export function buildPeriodReportSummary({
       bestDay = { dateBr: `${shortDate}/${dateKey.slice(0, 4)}`, tokens };
     }
     if (peakViewers > maxPeak) maxPeak = peakViewers;
+
+    let dailyViewerSum = Number(daily.viewerSum) || 0;
+    let dailyViewerSamples = Number(daily.viewerSamplesCount) || 0;
+    if (dailyViewerSamples === 0) {
+      Object.values(daily.minuteBuckets || {}).forEach((minute) => {
+        dailyViewerSum += Number(minute?.viewersSum) || 0;
+        dailyViewerSamples += Number(minute?.viewerSamples) || 0;
+      });
+    }
+    const avgViewers = dailyViewerSamples > 0
+      ? Math.round(dailyViewerSum / dailyViewerSamples)
+      : 0;
+    if (hasDailyRecord && (avgViewers > 0 || peakViewers > 0)) {
+      dailyAudienceBars.push({
+        dateKey,
+        label: shortDate,
+        avgViewers,
+        peakViewers,
+        tooltip: `${shortDate}: média ${avgViewers} • pico ${peakViewers} espectadores`,
+      });
+    }
 
     if (daily.userPeak) {
       userKeys.forEach((key) => {
@@ -1480,6 +1524,22 @@ export function buildPeriodReportSummary({
       value: Math.round(netSeconds / 60),
       tooltip: `${shortDate}: ${formatSecondsToTimeForReportData(netSeconds)} líquidos`,
     });
+    const bruteSeconds = Math.max(0, Number(daily.bruteDaySeconds) || 0);
+    bruteDurationDayBars.push({
+      dateKey,
+      label: shortDate,
+      value: Math.round(bruteSeconds / 60),
+      tooltip: `${shortDate}: ${formatSecondsToTimeForReportData(bruteSeconds)} brutos`,
+    });
+    const netSecondsForPace = Math.max(0, Number(daily.netDaySeconds) || 0);
+    if (netSecondsForPace > 0) {
+      dailyPaceBars.push({
+        dateKey,
+        label: shortDate,
+        value: Math.round((tokens / netSecondsForPace) * 3600),
+        tooltip: `${shortDate}: ${Math.round((tokens / netSecondsForPace) * 3600)} tk/h · ${formatSecondsToTimeForReportData(netSecondsForPace)} líquidos`,
+      });
+    }
   });
 
   const avgPerActiveDay =
@@ -1544,6 +1604,53 @@ export function buildPeriodReportSummary({
       };
     })
     .filter((bar) => bar && bar.value > 0);
+  const tokensUsersHourBars = hourlyTokensUserSamples
+    .map((samples, hour) => {
+      if (samples <= 0) return null;
+      const label = `${String(hour).padStart(2, "0")}h`;
+      const value = Math.round(hourlyTokensUserSums[hour] / samples);
+      return {
+        label,
+        value,
+        tooltip: `${label}: média de ${value} usuários com tokens`,
+      };
+    })
+    .filter((bar) => bar && bar.value > 0);
+  const tokensUsersPeakHourBars = hourlyTokensUserPeaks
+    .map((value, hour) => {
+      if (value <= 0) return null;
+      const label = `${String(hour).padStart(2, "0")}h`;
+      return {
+        label,
+        value,
+        tooltip: `${label}: pico de ${value} usuários com tokens`,
+      };
+    })
+    .filter((bar) => bar !== null);
+  const hourlyPaceBars = hourlyTokens
+    .map((tokens, hour) => {
+      const seconds = hourlyNetSeconds[hour];
+      if (tokens <= 0 || seconds <= 0) return null;
+      const label = `${String(hour).padStart(2, "0")}h`;
+      const value = Math.round((tokens / seconds) * 3600);
+      return {
+        label,
+        value,
+        tooltip: `${label}: ${value} tk/h · ${formatSecondsToTimeForReportData(seconds)} líquidos`,
+      };
+    })
+    .filter((bar) => bar && bar.value > 0);
+  const weekdayPaceBars = weekdayStats
+    .filter((day) => day.days > 0 && day.netSeconds > 0)
+    .map((day) => {
+      const value = Math.round((day.tokens / day.netSeconds) * 3600);
+      return {
+        label: day.name.slice(0, 3),
+        value,
+        tooltip: `${day.name}: ${value} tk/h em ${day.days} dia(s)`,
+      };
+    })
+    .filter((bar) => bar.value > 0);
   const activeRatioPct =
     dayBars.length > 0 ? Math.round((activeDays / dayBars.length) * 100) : 0;
   const busiestWeekday = weekdayStats
@@ -1597,6 +1704,7 @@ export function buildPeriodReportSummary({
     maxPeak,
     dayBars,
     durationDayBars: groupPeriodMetricBars(durationDayBars, granularity, "minutos"),
+    bruteDurationDayBars: groupPeriodMetricBars(bruteDurationDayBars, granularity, "minutos"),
     weekdayStats,
     busiestWeekday,
     bestTokenWeekday,
@@ -1646,9 +1754,16 @@ export function buildPeriodReportSummary({
     isMonthly,
     chartBars,
     hourlyBars,
+    hourlyPaceBars,
+    weekdayPaceBars,
+    dailyPaceBars,
+    dailyAudienceBars,
     audienceHourBars,
     listedUsersHourBars,
+    tokensUsersHourBars,
+    tokensUsersPeakHourBars,
     periodNetSeconds,
+    periodBruteSeconds,
     audienceEfficiency: {
       tokensPerAverageViewer: periodAvgViewers > 0
         ? Math.round((totalPeriodTokens / periodAvgViewers) * 10) / 10

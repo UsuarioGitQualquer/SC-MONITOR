@@ -548,6 +548,53 @@ test("lists inclusive UTC dates and preserves the 400-day history limit", () => 
   assert.equal(cappedDates[399], "2025-02-03");
 });
 
+test("averages users with tokens by date and by weekday", () => {
+  const dateKeys = ["2026-01-05", "2026-01-06", "2026-01-12"];
+  const summary = buildPeriodReportSummary({
+    modelId: "model",
+    start: dateKeys[0],
+    end: dateKeys[2],
+    dateKeys,
+    dailyByDate: {
+      "2026-01-05": {
+        date: "2026-01-05",
+        minuteBuckets: {
+          "10:00": { minute: "10:00", tokensUsersSum: 4, tokensUsersSamples: 2 },
+          "10:01": { minute: "10:01", tokensUsersSum: 6, tokensUsersSamples: 1 },
+        },
+      },
+      "2026-01-06": {
+        date: "2026-01-06",
+        minuteBuckets: {
+          "10:00": { minute: "10:00", tokensUsersSum: 9, tokensUsersSamples: 3 },
+        },
+      },
+      "2026-01-12": {
+        date: "2026-01-12",
+        minuteBuckets: {
+          "10:00": { minute: "10:00", tokensUsersSum: 10, tokensUsersSamples: 1 },
+        },
+      },
+    },
+  });
+
+  assert.deepEqual(
+    summary.tokensUsersDayBars.map(({ label, value }) => [label, value]),
+    [["05/01", 3], ["06/01", 3], ["12/01", 10]],
+  );
+  assert.equal(summary.tokensUsersWeekdayBars.length, 7);
+  assert.deepEqual(
+    summary.tokensUsersWeekdayBars.find((day) => day.label === "Segunda"),
+    {
+      label: "Segunda",
+      value: 7,
+      days: 2,
+      tooltip: "Segunda: média de 7 usuários com tokens em 2 dias",
+    },
+  );
+  assert.equal(summary.tokensUsersWeekdayBars[0].days, 0);
+});
+
 test("aggregates period metrics, hourly bars, weekdays, users, and leagues", () => {
   const dateKeys = ["2026-01-05", "2026-01-06"];
   const modelEntries = [
@@ -914,4 +961,21 @@ test("keeps period summary metrics safe when no history exists", () => {
   assert.equal(summary.activeRatioPct, 0);
   assert.equal(summary.busiestWeekday, null);
   assert.equal(summary.bestTokenWeekday, null);
+});
+
+test("does not count empty audience snapshots as recorded audience data", () => {
+  const summary = buildPeriodReportSummary({
+    modelId: "model-a",
+    modelEntries: [],
+    start: "2026-01-05",
+    end: "2026-01-06",
+    dateKeys: ["2026-01-05", "2026-01-06"],
+    dailyByDate: {
+      "2026-01-05": { audienceStats: {} },
+    },
+  });
+
+  assert.equal(summary.audienceDays, 0);
+  assert.deepEqual(summary.newUserBars, []);
+  assert.deepEqual(summary.returningUserBars, []);
 });

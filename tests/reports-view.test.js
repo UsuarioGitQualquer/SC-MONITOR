@@ -461,6 +461,20 @@ test("renders period totals and weekday summaries", () => {
     ],
     audienceHourBars: [{ label: "14h", value: 18, tooltip: "14h: média de 18 espectadores" }],
     listedUsersHourBars: [{ label: "14h", value: 8, tooltip: "14h: média de 8 usuários listados" }],
+    tokensUsersHourBars: [{ label: "14h", value: 5, tooltip: "14h: média de 5 usuários com tokens" }],
+    tokensUsersPeakHourBars: [{ label: "14h", value: 9, tooltip: "14h: pico de 9 usuários com tokens" }],
+    bruteDurationDayBars: [{ label: "18/11", value: 90, tooltip: "18/11: 01:30:00 brutos" }],
+    durationDayBars: [{ label: "18/11", value: 60, tooltip: "18/11: 01:00:00 líquidos" }],
+    dailyPaceBars: [{ label: "18/11", value: 120, tooltip: "18/11: 120 tk/h" }],
+    hourlyPaceBars: [{ label: "14h", value: 180, tooltip: "14h: 180 tk/h" }],
+    weekdayPaceBars: [
+      { label: "Seg", value: 100, tooltip: "Segunda: 100 tk/h" },
+      { label: "Qua", value: 150, tooltip: "Quarta: 150 tk/h" },
+    ],
+    dailyAudienceBars: [
+      { label: "18/11", avgViewers: 12, peakViewers: 20, tooltip: "18/11: média 12 • pico 20 espectadores" },
+      { label: "19/11", avgViewers: 15, peakViewers: 25, tooltip: "19/11: média 15 • pico 25 espectadores" },
+    ],
     periodUserPeak: {},
     periodUserAvg: {},
     periodLeaguePeak: {},
@@ -567,6 +581,9 @@ test("renders period totals and weekday summaries", () => {
   assert.match(html, /Horário com maior média de espectadores/);
   assert.match(html, /Média de espectadores por horário/);
   assert.match(html, /Média de usuários listados por horário/);
+  assert.match(html, /Média de usuários com tokens por horário/);
+  assert.match(html, /Pico de usuários com tokens por horário/);
+  assert.doesNotMatch(html, /Evolução de tokens/);
   const getChartSvg = (title) => {
     const titleIndex = html.indexOf(`>${title}</strong>`);
     const svgStart = html.indexOf("<svg", titleIndex);
@@ -575,7 +592,6 @@ test("renders period totals and weekday summaries", () => {
     return html.slice(svgStart, svgEnd + "</svg>".length);
   };
   for (const title of [
-    "Evolução de tokens",
     "Tokens por horário",
     "Média de espectadores por horário",
   ]) {
@@ -619,6 +635,13 @@ test("renders period totals and weekday summaries", () => {
   assert.match(html, /Live com mais tokens/);
   assert.match(html, /Live com melhor ritmo/);
   assert.match(html, /Tokens por live no período/);
+  assert.match(html, /Tempo bruto de live por dia/);
+  assert.match(html, /Tempo líquido de live por dia/);
+  assert.match(html, /Ritmo de ganhos por dia/);
+  assert.match(html, /Ritmo de ganhos por horário/);
+  assert.match(html, /Ritmo médio por dia da semana/);
+  assert.match(html, /Pico e média de espectadores por dia/);
+  assert.match(html, /Picos de espectadores por dia/);
   assert.match(html, /Mapa de calor por dia e horário/);
   assert.match(html, /Atividade e moderação por horário/);
   assert.match(html, /Engajamento por usuário/);

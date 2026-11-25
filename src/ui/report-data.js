@@ -1019,6 +1019,7 @@ export function buildPeriodReportSummary({
   const bruteDurationDayBars = [];
   const dailyPaceBars = [];
   const dailyAudienceBars = [];
+  const tokensUsersDayAverages = [];
   let totalPeriodTokens = 0;
   let activeDays = 0;
   const activeDayDates = [];
@@ -1043,6 +1044,20 @@ export function buildPeriodReportSummary({
     const shortDate = `${dateKey.slice(8, 10)}/${dateKey.slice(5, 7)}`;
     const entry = entryByDate.get(dateKey);
     const daily = dailyByDate[dateKey] || {};
+    const minuteBuckets = Object.values(daily.minuteBuckets || {});
+    const tokensUsersDailyTotals = minuteBuckets.reduce((totals, minute) => {
+      totals.sum += Math.max(0, Number(minute?.tokensUsersSum) || 0);
+      totals.samples += Math.max(0, Number(minute?.tokensUsersSamples) || 0);
+      return totals;
+    }, { sum: 0, samples: 0 });
+    if (tokensUsersDailyTotals.samples > 0) {
+      tokensUsersDayAverages.push({
+        dateKey,
+        label: shortDate,
+        average: tokensUsersDailyTotals.sum / tokensUsersDailyTotals.samples,
+        samples: tokensUsersDailyTotals.samples,
+      });
+    }
     periodNetSeconds += Math.max(0, Number(daily.netDaySeconds) || 0);
     periodBruteSeconds += Math.max(0, Number(daily.bruteDaySeconds) || 0);
     Object.entries(daily.leagueUserTotals || {}).forEach(([key, league]) => {
@@ -1327,7 +1342,7 @@ export function buildPeriodReportSummary({
     });
 
     if (hasEventSummary) eventSummaryDays += 1;
-    if (audience && typeof audience === "object") {
+    if (hasAudienceStats(audience)) {
       audienceDays += 1;
       const newUsers = Math.max(0, Number(audience.newUsers) || 0);
       const returningUsers = Math.max(0, Number(audience.returningUsers) || 0);
@@ -1356,7 +1371,7 @@ export function buildPeriodReportSummary({
         fallbackNewTippers += Number(audience.newTippers);
       }
     }
-    if (audience && typeof audience === "object") {
+    if (hasAudienceStats(audience)) {
       newTipperBars.push({
         dateKey,
         label: shortDate,
@@ -1391,7 +1406,7 @@ export function buildPeriodReportSummary({
       });
     }
 
-    Object.values(daily.minuteBuckets || {}).forEach((minute) => {
+    minuteBuckets.forEach((minute) => {
       const hour = Number(String(minute?.minute || "").split(":")[0]);
       if (!Number.isInteger(hour) || hour < 0 || hour > 23) return;
       hourlyTokens[hour] += Number(minute.tokens) || 0;
@@ -1566,6 +1581,37 @@ export function buildPeriodReportSummary({
         : 0,
     ]),
   );
+  const tokensUsersDayBars = tokensUsersDayAverages.map((day) => {
+    const average = Math.round(day.average);
+    const sampleLabel = day.samples === 1 ? "amostra" : "amostras";
+    return {
+      dateKey: day.dateKey,
+      label: day.label,
+      value: average,
+      tooltip: `${day.label}: média de ${average} usuários com tokens calculada a partir de ${day.samples} ${sampleLabel}`,
+    };
+  });
+  const tokensUsersByWeekday = WEEKDAY_NAMES.map(() => ({ sum: 0, days: 0 }));
+  tokensUsersDayAverages.forEach((day) => {
+    const weekday = weekdayIndexFromDateKey(day.dateKey);
+    if (weekday < 0) return;
+    tokensUsersByWeekday[weekday].sum += day.average;
+    tokensUsersByWeekday[weekday].days += 1;
+  });
+  const tokensUsersWeekdayBars = tokensUsersDayAverages.length > 0
+    ? WEEKDAY_NAMES.map((name, weekday) => {
+      const { sum, days } = tokensUsersByWeekday[weekday];
+      const average = days > 0 ? Math.round(sum / days) : 0;
+      return {
+        label: name,
+        value: average,
+        days,
+        tooltip: days > 0
+          ? `${name}: média de ${average} usuários com tokens em ${days} ${days === 1 ? "dia" : "dias"}`
+          : `${name}: sem registros no período`,
+      };
+    })
+    : [];
   const isWeekly = granularity === "week";
   const isMonthly = granularity === "month";
   const chartBars = isWeekly
@@ -1761,6 +1807,8 @@ export function buildPeriodReportSummary({
     audienceHourBars,
     listedUsersHourBars,
     tokensUsersHourBars,
+    tokensUsersDayBars,
+    tokensUsersWeekdayBars,
     tokensUsersPeakHourBars,
     periodNetSeconds,
     periodBruteSeconds,

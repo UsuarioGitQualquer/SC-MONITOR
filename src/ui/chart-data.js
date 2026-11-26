@@ -146,7 +146,11 @@ function buildTimeBucketBars(minuteRows, stepMinutes = 60, startMinStr = null, e
   };
 
   const result = [];
-  for (let slot = minSlotTotal; slot <= maxSlotTotal; slot += step) {
+  const occupiedSlots = Array.from(bucketMap.keys()).sort((a, b) => a - b);
+  const renderedSlots = new Set();
+  const appendSlot = (slot) => {
+    if (renderedSlots.has(slot)) return;
+    renderedSlots.add(slot);
     const data = bucketMap.get(slot) || {
       value: 0,
       viewersSum: 0,
@@ -173,7 +177,20 @@ function buildTimeBucketBars(minuteRows, stepMinutes = 60, startMinStr = null, e
       listedUsersSamples: data.listedUsersSamples,
       tooltip: `${startLabel} - ${endLabel} (${step === 60 ? "1h" : `${step}m`}): ${Math.round(data.value)} tk • Média ${avgViewers} viewers • ${avgListedUsers} usuários listados${data.unassignedTokens > 0 ? ` • ${Math.round(data.unassignedTokens)} tk recuperados do total diário, sem minuto registrado` : ""}`,
     });
-  }
+  };
+
+  occupiedSlots.forEach((slot, index) => {
+    appendSlot(slot);
+    const nextSlot = occupiedSlots[index + 1];
+    if (nextSlot === undefined) return;
+
+    const gapMinutes = nextSlot - slot;
+    if (gapMinutes <= 60) {
+      for (let missingSlot = slot + step; missingSlot < nextSlot; missingSlot += step) {
+        appendSlot(missingSlot);
+      }
+    }
+  });
 
   return result;
 }

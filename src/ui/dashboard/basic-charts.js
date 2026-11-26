@@ -255,7 +255,9 @@ export function buildCombinedAudienceEarningsChart({
     }
     return lastAudienceValue;
   });
-  const earningsValues = labels.map((label) => Math.max(0, Number(earningsMap.get(label)?.value) || 0));
+  const earningsValues = labels.map((label) =>
+    Math.max(0, Number(earningsMap.get(label)?.value) || 0),
+  );
   const knownAudienceValues = audienceValues.filter((value) => value !== null);
   const maxAudience = Math.max(1, ...knownAudienceValues);
   const maxEarnings = Math.max(1, ...earningsValues);
@@ -266,17 +268,20 @@ export function buildCombinedAudienceEarningsChart({
 
   const coords = labels.map((label, index) => ({
     x: xAt(index),
-    y: audienceY(audienceValues[index] || 0),
+    y: audienceY(audienceValues[index] ?? 0),
     value: audienceValues[index] || 0,
     label,
   }));
   let linePath = "";
-  if (coords.length > 0) {
-    linePath = `M ${coords[0].x.toFixed(1)} ${coords[0].y.toFixed(1)}`;
-    for (let index = 1; index < coords.length; index++) {
-      linePath += ` L ${coords[index].x.toFixed(1)} ${coords[index].y.toFixed(1)}`;
+  let lastSegmentHasPoint = false;
+  coords.forEach((point, index) => {
+    if (!lastSegmentHasPoint) {
+      linePath += `${linePath ? " M " : "M "}${point.x.toFixed(1)} ${point.y.toFixed(1)}`;
+    } else {
+      linePath += ` L ${point.x.toFixed(1)} ${point.y.toFixed(1)}`;
     }
-  }
+    lastSegmentHasPoint = true;
+  });
   const areaPath = coords.length > 1
     ? `${linePath} L ${coords[coords.length - 1].x.toFixed(1)} ${padT + plotH} L ${coords[0].x.toFixed(1)} ${padT + plotH} Z`
     : "";
@@ -428,7 +433,6 @@ export function buildCombinedAudienceEarningsChart({
     ...unmatchedShowEnds.map((event) => event.showType),
   ])];
   const hasOtherEventMarkers = events.some((event) => !event.showBoundary);
-
   return `
     <div class="scm-cyber-card" style="border:1px solid #2b3450; border-radius:12px; background:linear-gradient(145deg,#1b2138,#151a2d);">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; gap:6px;">

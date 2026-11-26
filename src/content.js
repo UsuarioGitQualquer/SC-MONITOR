@@ -1750,8 +1750,7 @@
     if (!force && (!state.room || state.room === currentRoom)) return false;
 
     if (getMonitoring()) {
-      console.info(`[SC Monitor] Monitoramento pausado por mudança de sala: ${currentRoom}.`);
-      persistCurrentState();
+      stopMonitoringSession(true, `mudança de sala para ${currentRoom}`);
     }
 
     core.setMonitoring(false);
@@ -2139,17 +2138,13 @@
       );
     });
 
-    let lastPath = window.location.pathname;
     let lastModelName = roomName();
 
     spaInterval = setInterval(() => {
-      const currentPath = window.location.pathname;
       const currentModel = roomName();
 
-      if ((currentPath !== lastPath || currentModel !== lastModelName) && currentModel && currentModel !== "Sala Desconhecida") {
-        lastPath = currentPath;
+      if (currentModel !== lastModelName) {
         lastModelName = currentModel;
-
         handleRoomChange(currentModel, true);
       }
     }, 1000);

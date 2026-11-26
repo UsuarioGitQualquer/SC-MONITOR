@@ -71,6 +71,21 @@ test("builds token charts with the selected one- and twenty-minute intervals", (
   );
 });
 
+test("does not expand an entire day across long idle periods", () => {
+  const bars = buildTimeBucketBars([
+    { minute: "00:10", tokens: 1 },
+    { minute: "21:30", tokens: 2 },
+  ], 5);
+
+  assert.deepEqual(
+    bars.map(({ label, value }) => ({ label, value })),
+    [
+      { label: "00:10", value: 1 },
+      { label: "21:30", value: 2 },
+    ],
+  );
+});
+
 test("weights interval audience averages by samples and ignores unsampled minutes", () => {
   const bars = buildTimeBucketBars([
     { minute: "10:00", avgViewers: 10, viewerSamples: 10 },

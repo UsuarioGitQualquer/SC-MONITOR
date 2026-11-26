@@ -169,6 +169,61 @@ WEEKDAY COMPARISONS AND TRANSPARENT METRICS
      timeline, user engagement, audience efficiency, league contributions,
      and a combined goals-and-shows history.
 
+   HOW TO READ THE REPORT CHARTS
+
+   - The page offers three views: Day, Session, and Period. Choose a model/room
+     and the available data. For a period report, set the date range and group
+     results by day, week, or month. You can also compare two periods.
+
+   - In Day and Session reports, the combined chart shows tokens per interval
+     alongside audience changes. The daily report marks recorded shows. Flow
+     charts break down tokens and listed users; choose a block size or use Auto
+     to adjust it to the recorded duration. Tokens without a timestamp are
+     shown separately and are not artificially assigned to blocks.
+
+   - The daily report's audience charts and metrics show retention, user
+     peaks/averages, and league distribution. Earnings composition groups
+     tokens by category. Performance charts compare duration and tokens across
+     the day's live sessions. Rankings show top individual tips, menu options,
+     and recorded roulette results. Tables also show sessions, tippers,
+     suspected users, and muted users when data is available.
+
+   - The Session report's combined chart shows audience and earnings over the
+     selected live's intervals. It also includes token and listed-user flow,
+     earnings by category, and a table of key differences when another session
+     is selected for comparison.
+
+   - In Period reports, "Earnings by date/week/month" sums tokens in each
+     grouping. "Tokens by hour" combines records from the same hour across the
+     period; "Average tokens by hour" divides that total by active days. Pace
+     charts use tokens per net live hour (tk/h). "Largest tip" shows the
+     maximum tip in each grouping, not the sum of tips.
+
+   - Audience charts include daily viewer peaks and averages, hourly averages,
+     and averages of listed users and users with tokens by hour, date, and
+     weekday. Hourly audience and user averages are weighted by recorded
+     samples; date and weekday averages use days with data. The hourly peak of
+     users with tokens is the highest count observed in that hour, not an
+     average.
+
+   - Live charts show active-day frequency, gross and net duration, tokens,
+     and pace per live. New/returning-user and tipper charts show changes by
+     grouping; in tipper series, the same person may appear on multiple days.
+     Period comparisons show average tokens and, when available, average
+     viewers.
+
+   - The heatmap organizes tokens by weekday and hour; color intensity
+     represents tokens, and its tooltip also shows events and average viewers.
+     The timeline separates events from moderation by hour. Engagement,
+     league, tipper, and room-king tables complement the charts with
+     individual or aggregate metrics.
+
+   - Suspected-bot and muted-user charts count distinct users in each interval;
+     they are not a cumulative count of unique people across the entire
+     period. A bot suspicion is heuristic, not confirmation. Charts may be
+     empty when no records were saved; missing values do not necessarily mean
+     there was zero activity.
+
    - Each goal or show in the period timeline can be deleted individually.
      The action requires confirmation, removes the record from history, and
      does not recalculate aggregate metrics. Monitoring for that model must

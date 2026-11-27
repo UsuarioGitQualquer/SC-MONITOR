@@ -43,9 +43,9 @@ export function buildPanelHtml({ headerDate, footerDate, fanClubPrices = {}, sho
         </div>
         <div class="cards">
           <div class="card scm-metric-card" style="background: linear-gradient(135deg, #181a36 0%, #1c254c 100%); border-left: 3px solid #00e5ff;"><div class="scm-metric-heading"><span class="scm-metric-icon scm-metric-icon--green" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M15.5 8.5c-.7-.7-1.7-1-3-1-1.6 0-2.7.8-2.7 2 0 3 5.4 1.2 5.4 4.3 0 1.3-1.2 2.2-2.9 2.2-1.3 0-2.5-.5-3.3-1.3M12 5.5v13"></path></svg></span><small style="color: #00e5ff;">Tokens hoje (gorjetas + shows estimados)</small></div><strong id="scm-tokens" style="font-size: 18px; color: #fff;">0 tk</strong></div>
-          <div class="card scm-metric-card" style="background: linear-gradient(135deg, #1a3114 0%, #204d17 100%); border-left: 3px solid #07af04;"><div class="scm-metric-heading"><span class="scm-metric-icon scm-metric-icon--green" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M15.5 8.5c-.7-.7-1.7-1-3-1-1.6 0-2.7.8-2.7 2 0 3 5.4 1.2 5.4 4.3 0 1.3-1.2 2.2-2.9 2.2-1.3 0-2.5-.5-3.3-1.3M12 5.5v13"></path></svg></span><small style="color: #00ff3c;">Tokens na sessão (gorjetas + shows estimados)</small></div><strong id="scm-session-tokens" style="font-size: 18px; color: #fff;">0 tk</strong></div>
-          <div class="card scm-metric-card"><div class="scm-metric-heading"><span class="scm-metric-icon scm-metric-icon--purple" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"></circle><path d="M12 9v4l2.5 1.5M9 2h6"></path></svg></span><small>Tempo Bruto (Sessão)</small></div><strong id="scm-time-brute">00:00:00</strong></div>
-          <div class="card scm-metric-card"><div class="scm-metric-heading"><span class="scm-metric-icon scm-metric-icon--purple" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"></circle><path d="M12 9v4l2.5 1.5M9 2h6"></path></svg></span><small>Tempo Líquido (Sessão)</small></div><strong id="scm-time-net" style="color: #00e5ff;">00:00:00</strong></div>
+          <div class="card scm-metric-card" style="background: linear-gradient(135deg, #1a3114 0%, #204d17 100%); border-left: 3px solid #07af04;"><div class="scm-metric-heading"><span class="scm-metric-icon scm-metric-icon--green" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M15.5 8.5c-.7-.7-1.7-1-3-1-1.6 0-2.7.8-2.7 2 0 3 5.4 1.2 5.4 4.3 0 1.3-1.2 2.2-2.9 2.2-1.3 0-2.5-.5-3.3-1.3M12 5.5v13"></path></svg></span><small style="color: #00ff3c;">Tokens na live (gorjetas + shows estimados)</small></div><strong id="scm-session-tokens" style="font-size: 18px; color: #fff;">0 tk</strong></div>
+          <div class="card scm-metric-card"><div class="scm-metric-heading"><span class="scm-metric-icon scm-metric-icon--purple" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"></circle><path d="M12 9v4l2.5 1.5M9 2h6"></path></svg></span><small>Tempo Bruto (Live)</small></div><strong id="scm-time-brute">00:00:00</strong></div>
+          <div class="card scm-metric-card"><div class="scm-metric-heading"><span class="scm-metric-icon scm-metric-icon--purple" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"></circle><path d="M12 9v4l2.5 1.5M9 2h6"></path></svg></span><small>Tempo Líquido (Live)</small></div><strong id="scm-time-net" style="color: #00e5ff;">00:00:00</strong></div>
           <div class="card scm-metric-card"><div class="scm-metric-heading"><span class="scm-metric-icon scm-metric-icon--blue" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"></path><circle cx="12" cy="12" r="2.5"></circle></svg></span><small>Espectadores agora</small></div><strong id="scm-viewers" style="color: #ff7b00;">—</strong></div>
           <div class="card scm-metric-card"><div class="scm-metric-heading"><span class="scm-metric-icon scm-metric-icon--purple" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"></circle><path d="M12 9v4l2.5 1.5M9 2h6"></path></svg></span><small>Tempo Líquido (Hoje)</small></div><strong id="scm-time-net-day" style="color: #c084fc;">00:00:00</strong></div>
         </div>
@@ -56,7 +56,7 @@ export function buildPanelHtml({ headerDate, footerDate, fanClubPrices = {}, sho
           </div>
         </div>
         <div style="font-size:10px; color:#8b92b8; font-style:italic; margin-bottom:8px; line-height:1.45; background:rgba(0,229,255,0.05); padding:5px 7px; border-radius:6px;">
-          ℹ️ <strong style="color:#e2e8f0;">Tempo Bruto:</strong> cronômetro total desde o início do monitoramento.<br>
+          ℹ️ <strong style="color:#e2e8f0;">Tempo Bruto:</strong> conta ao vivo e em espera; pausa quando a sala fica offline.<br>
           ℹ️ <strong style="color:#e2e8f0;">Tempo Líquido:</strong> tempo efetivo com a transmissão ativa e a sala realmente online.
         </div>
 
@@ -92,17 +92,6 @@ export function buildPanelHtml({ headerDate, footerDate, fanClubPrices = {}, sho
           <div class="card scm-metric-card" style="border-left: 3px solid #00e5ff;"><div class="scm-metric-heading"><span class="scm-metric-icon scm-metric-icon--green" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"></circle><path d="M3.5 19v-1.5a5.5 5.5 0 0 1 11 0V19zM18 8v6m-3-3h6"></path></svg></span><small>Novos (Hoje)</small></div><strong id="scm-new-users" style="color: #00e5ff;">0</strong></div>
           <div class="card scm-metric-card" style="border-left: 3px solid #8a2be2;"><div class="scm-metric-heading"><span class="scm-metric-icon scm-metric-icon--purple" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5"></path><path d="M6.1 9a7 7 0 0 1 11.6-2L20 12M4 12l2.3 5a7 7 0 0 0 11.6-2"></path></svg></span><small>Recorrentes (Hoje)</small></div><strong id="scm-returning-users" style="color: #c084fc;">0</strong></div>
         </div>
-        <div id="scm-users-audience-step-bar" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px; margin:4px 0 6px;">
-          <span style="font-size:10px; color:#8b92b8;">Bloco do gráfico:</span>
-          <div style="display:flex; flex-wrap:wrap; gap:4px;">
-            <button type="button" class="scm-users-audience-step" data-step="auto" style="background:linear-gradient(90deg, #00e5ff, #2563eb); color:#0f1024; border:0; padding:4px 7px; border-radius:6px; font-size:10px; font-weight:bold; cursor:pointer;">Auto (1m)</button>
-            <button type="button" class="scm-users-audience-step" data-step="5" style="background:#23264d; color:#8b92b8; border:0; padding:4px 7px; border-radius:6px; font-size:10px; font-weight:bold; cursor:pointer;">5m</button>
-            <button type="button" class="scm-users-audience-step" data-step="10" style="background:#23264d; color:#8b92b8; border:0; padding:4px 7px; border-radius:6px; font-size:10px; font-weight:bold; cursor:pointer;">10m</button>
-            <button type="button" class="scm-users-audience-step" data-step="30" style="background:#23264d; color:#8b92b8; border:0; padding:4px 7px; border-radius:6px; font-size:10px; font-weight:bold; cursor:pointer;">30m</button>
-            <button type="button" class="scm-users-audience-step" data-step="60" style="background:#23264d; color:#8b92b8; border:0; padding:4px 7px; border-radius:6px; font-size:10px; font-weight:bold; cursor:pointer;">1h</button>
-          </div>
-        </div>
-        <div id="scm-users-audience-chart"></div>
         <div style="font-size:10px; color:#8b92b8; font-style:italic; margin-bottom:10px; line-height:1.45;">
           ℹ️ <strong style="color:#e2e8f0;">Mais (+)</strong> representa usuários sem nick visível na lista que aparecem como "+ mais usuários".<br>
           ℹ️ <strong style="color:#e2e8f0;">Listados</strong> representa usuários cujo nick aparece na lista da sala. As categorias podem se sobrepor; não some os cartões para obter o total de espectadores.
@@ -118,6 +107,18 @@ export function buildPanelHtml({ headerDate, footerDate, fanClubPrices = {}, sho
           <div class="card" style="border-left: solid 3px #ff2a6d; padding: 8px;"><small class="leagues">Real</small><strong id="scm-league-royal">0</strong></div>
           <div class="card" style="border-left: solid 3px #ff7b00; padding: 8px;"><small class="leagues">⭐Lendária</small><strong id="scm-league-legend">0</strong></div>
         </div>
+
+        <div id="scm-users-audience-step-bar" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px; margin:4px 0 6px;">
+          <span style="font-size:10px; color:#8b92b8;">Bloco do gráfico:</span>
+          <div style="display:flex; flex-wrap:wrap; gap:4px;">
+            <button type="button" class="scm-users-audience-step" data-step="auto" style="background:linear-gradient(90deg, #00e5ff, #2563eb); color:#0f1024; border:0; padding:4px 7px; border-radius:6px; font-size:10px; font-weight:bold; cursor:pointer;">Auto (1m)</button>
+            <button type="button" class="scm-users-audience-step" data-step="5" style="background:#23264d; color:#8b92b8; border:0; padding:4px 7px; border-radius:6px; font-size:10px; font-weight:bold; cursor:pointer;">5m</button>
+            <button type="button" class="scm-users-audience-step" data-step="10" style="background:#23264d; color:#8b92b8; border:0; padding:4px 7px; border-radius:6px; font-size:10px; font-weight:bold; cursor:pointer;">10m</button>
+            <button type="button" class="scm-users-audience-step" data-step="30" style="background:#23264d; color:#8b92b8; border:0; padding:4px 7px; border-radius:6px; font-size:10px; font-weight:bold; cursor:pointer;">30m</button>
+            <button type="button" class="scm-users-audience-step" data-step="60" style="background:#23264d; color:#8b92b8; border:0; padding:4px 7px; border-radius:6px; font-size:10px; font-weight:bold; cursor:pointer;">1h</button>
+          </div>
+        </div>
+        <div id="scm-users-audience-chart"></div>
 
         <div style="display: flex; justify-content: space-between; align-items: center; margin: 14px 0 6px 0; border-bottom: 1px solid #272952; padding-bottom: 6px;">
           <h4 style="margin: 0; border: 0; padding: 0;">Lista de Usuários</h4>
@@ -205,6 +206,8 @@ export function buildPanelHtml({ headerDate, footerDate, fanClubPrices = {}, sho
         </div>
 
         <h4>Mensagens Moderadas</h4>
+        <div style="font-size:11px; color:#8b92b8; margin: 0 0 8px;">Dia atual: <span id="scm-modlog-current-date"></span></div>
+        <div id="scm-modlog-delete-status" role="status" aria-live="polite" style="font-size:10px; color:#8b92b8; margin-bottom:6px;"></div>
         <div class="scroll"><table><thead><tr><th>Usuário</th><th>Mensagem / Motivo</th></tr></thead><tbody id="scm-moderation-table"></tbody></table></div>
 
         <h4>Usuários Silenciados</h4>
@@ -265,7 +268,7 @@ export function buildPanelHtml({ headerDate, footerDate, fanClubPrices = {}, sho
             <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom: 10px;">
               <span style="font-weight: 700; color: #00e5ff; font-size: 12px;">📑 Central de Relatórios</span>
               <div id="scm-report-mode-bar" style="display:flex; gap:4px; flex-wrap:wrap;">
-              <button type="button" class="scm-rep-mode-btn" data-mode="session" style="background:#23264d; color:#8b92b8; border:0; padding:4px 8px; border-radius:99px; font-size:10px; font-weight:bold; cursor:pointer;">🎬 Sessão</button>
+              <button type="button" class="scm-rep-mode-btn" data-mode="session" style="background:#23264d; color:#8b92b8; border:0; padding:4px 8px; border-radius:99px; font-size:10px; font-weight:bold; cursor:pointer;">🎬 Live</button>
               <button type="button" class="scm-rep-mode-btn" data-mode="day" style="background:linear-gradient(90deg, #ff2a6d, #ff7b00); color:#fff; border:0; padding:4px 8px; border-radius:99px; font-size:10px; font-weight:bold; cursor:pointer;">📅 Dia</button>
               </div>
             </div>
@@ -326,7 +329,7 @@ export function buildPanelHtml({ headerDate, footerDate, fanClubPrices = {}, sho
         </div>
         <div class="button-row">
           <button id="scm-export">CSV</button>
-          <button id="scm-reset">Limpar sessão</button>
+          <button id="scm-reset">Limpar live</button>
         </div>
       </div>
     </div>

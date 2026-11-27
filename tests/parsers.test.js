@@ -4,6 +4,7 @@ import {
   getGroupShowKind,
   getGroupShowStatus,
   hasActiveTicketShowTimer,
+  isRoomOffline,
   parseRoomKingTokens,
   parseShowParticipantsCount,
   parseUsersWithTokensCount,
@@ -43,6 +44,11 @@ test("classifies ticket and group show text in Portuguese, Spanish, and English"
   assert.equal(getGroupShowKind("Ticket show · Obtener ticket"), "ticket");
   assert.equal(getGroupShowKind("Ticket show · Get ticket"), "ticket");
   assert.equal(getGroupShowKind("Show de entradas"), "ticket");
+  assert.equal(
+    getGroupShowKind("convidou você para o show · Assistir por 12 tk/min", "#icons-group-ds"),
+    "group",
+  );
+  assert.equal(getGroupShowKind("convida-o(a) para Show em Grupo", "#icons-group-ds"), "group");
   assert.equal(getGroupShowKind("convida para Show em Grupo"), "group");
   assert.equal(getGroupShowKind("te invita a un show grupal"), "group");
   assert.equal(getGroupShowKind("invites you to Group show"), "group");
@@ -90,3 +96,55 @@ test("detects an active ticket show from its on-screen elapsed timer, not viewer
   );
   assert.equal(hasActiveTicketShowTimer(null), false);
 });
+
+test("detects offline status labels shown by the room overlay", () => {
+  const previousDocument = Object.getOwnPropertyDescriptor(globalThis, "document");
+  try {
+    globalThis.document = {
+      querySelector: () => null,
+      querySelectorAll: () => [{
+        innerText: "OFF-LINE Estava on-line há 8 minutos",
+      }],
+    };
+    assert.equal(isRoomOffline(), true);
+
+    globalThis.document.querySelectorAll = () => [{
+      innerText: "Status da sala: OFF‑LINE Estava on-line há 13 minutos",
+    }];
+    assert.equal(isRoomOffline(), true);
+
+    for (const label of [
+      "Offline — Esteve online há 31 minutos",
+      "Fuera de línea — Estuvo en línea hace 31 minutos",
+      "Fora de linha — Esteve online há 30 minutos",
+    ]) {
+      globalThis.document.querySelectorAll = () => [{ innerText: label }];
+      assert.equal(isRoomOffline(), true, `Expected offline label to match: ${label}`);
+    }
+
+    globalThis.document.querySelectorAll = () => [{ innerText: "Aguarde" }];
+    assert.equal(isRoomOffline(), false);
+
+    globalThis.document.querySelectorAll = () => [{
+      className: "offline-status-time",
+      innerText: "Estava on-line há 2 minutos",
+    }];
+    assert.equal(isRoomOffline(), false);
+
+    globalThis.document.querySelectorAll = () => [{
+      className: "ViewCamShutterWrapper__statusOffline",
+    }];
+    assert.equal(isRoomOffline(), true);
+
+    globalThis.document.querySelector = (selector) =>
+      selector.includes(".vc-status-offline") ? {} : null;
+    assert.equal(isRoomOffline(), true);
+  } finally {
+    if (previousDocument) {
+      Object.defineProperty(globalThis, "document", previousDocument);
+    } else {
+      delete globalThis.document;
+    }
+  }
+});
+

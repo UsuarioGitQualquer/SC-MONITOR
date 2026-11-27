@@ -340,11 +340,25 @@ export function mergeDailyReportBuckets(dailies = []) {
       `${event.timestamp || event.time || ""}|${event.username || event.user || ""}|${event.item || ""}|${event.price || event.tokens || ""}|${index}`,
     ),
   );
+  merged.manualEarnings = mergeDailyRecordArrays(
+    sources,
+    "manualEarnings",
+    (event, index) => String(event.id || `manual-${index}`),
+  );
   merged.moderationLogs = mergeDailyRecordArrays(
     sources,
     "moderationLogs",
     (log, index) => String(log.id || `${log.timestamp || ""}|${log.username || ""}|${index}`),
   );
+  const deletedModerationIds = new Set(
+    sources.flatMap((source) => Array.isArray(source.moderationLogDeletedIds)
+      ? source.moderationLogDeletedIds
+      : []).map((id) => String(id)),
+  );
+  merged.moderationLogs = merged.moderationLogs.filter(
+    (log) => !deletedModerationIds.has(String(log.id || "")),
+  );
+  merged.moderationLogDeletedIds = Array.from(deletedModerationIds);
   merged.goalsSnapshot = mergeDailyRecordArrays(
     sources,
     "goalsSnapshot",
@@ -355,6 +369,12 @@ export function mergeDailyReportBuckets(dailies = []) {
     "suspectBots",
     (suspect) => String(suspect.username || "").toLocaleLowerCase(),
   );
+  const deletedMutedUserIds = new Set(
+    sources.flatMap((source) => Array.isArray(source.mutedUserDeletedIds)
+      ? source.mutedUserDeletedIds
+      : []).map((id) => String(id)),
+  );
+  merged.mutedUserDeletedIds = Array.from(deletedMutedUserIds);
   merged.mutedUsers = mergeDailyRecordArrays(
     sources,
     "mutedUsers",
@@ -465,6 +485,7 @@ export function classifyGainType(itemName = "", itemType = "") {
   if (combined.includes("roleta") || combined.includes("wheel") || combined.includes("spin")) {
     return "Roleta";
   }
+  if (/chat\s+privado|private\s+chat/.test(normalized)) return "Chat privado";
   if (combined.includes("show exclusivo") || combined.includes("exclusivo") || combined.includes("vip")) {
     return "Show exclusivo";
   }
@@ -573,6 +594,7 @@ export function hasAudienceConversionStats(stats) {
 
 function normalizeCapturedTip(event) {
   if (!event || typeof event !== "object") return null;
+  if (event.manualEntry === true) return null;
   const tokens = Math.max(0, Number(event.price ?? event.tokens) || 0);
   const username = String(event.username || event.user || "").trim();
   if (tokens <= 0 || !username) return null;
@@ -595,11 +617,403 @@ function normalizeCapturedTip(event) {
 }
 
 function getDailyCapturedEvents(daily) {
-  if (Array.isArray(daily?.capturedEvents)) return daily.capturedEvents;
-  if (daily?.capturedEvents && typeof daily.capturedEvents === "object") {
-    return Object.values(daily.capturedEvents);
-  }
-  return [];
+  const capturedEvents = Array.isArray(daily?.capturedEvents)
+    ? daily.capturedEvents
+    : daily?.capturedEvents && typeof daily.capturedEvents === "object"
+      ? Object.values(daily.capturedEvents)
+      : [];
+  const manualEvents = Array.isArray(daily?.manualEarnings)
+    ? daily.manualEarnings
+    : daily?.manualEarnings && typeof daily.manualEarnings === "object"
+      ? Object.values(daily.manualEarnings)
+      : [];
+  const merged = new Map();
+  [...capturedEvents, ...manualEvents].forEach((event, index) => {
+    if (!event || typeof event !== "object") return;
+    const key = String(event.id || `event-${index}`);
+    if (!merged.has(key)) merged.set(key, event);
+  });
+  return Array.from(merged.values());
+}
+
+function getManualEarningEvents(daily) {
+  return getDailyCapturedEvents(daily).filter((event) => event?.manualEntry === true);
+}
+
+function getManualEarningTotal(events = []) {
+  return events.reduce(
+    (total, event) => total + Math.max(0, Number(event.manualAmount) || 0),
+    0,
+  );
+}
+
+function addManualEarningSummary(eventSummaryTotals = {}, events = []) {
+  const summary = { ...eventSummaryTotals };
+  events.forEach((event) => {
+    const type = String(event.type || "Ganho manual");
+    const key = `__manual__:${type}`;
+    const previous = summary[key] || {};
+    summary[key] = {
+      count: Math.max(0, Number(previous.count) || 0) + 1,
+      tokens: Math.max(0, Number(previous.tokens) || 0) +
+        Math.max(0, Number(event.manualAmount) || 0),
+      type,
+    };
+  });
+  return summary;
+}
+
+function copyShowWithParticipants(show, dateKey) {
+  const copy = { ...show, dateKey };
+  ["id", "participants", "participantEntries"].forEach((key) => {
+    if (!(key in show)) return;
+    Object.defineProperty(copy, key, {
+      value: key === "participants" || key === "participantEntries"
+        ? [...show[key]]
+        : show[key],
+      enumerable: false,
+    });
+  });
+  return copy;
+}
+
+export function buildDailyShowStats(daily = {}) {
+  const stats = {
+    ticket: {
+      count: 0,
+      earnings: 0,
+      ticketsSold: 0,
+      unpricedTicketsSold: 0,
+      ticketShows: [],
+    },
+    private: { count: 0, earnings: 0, privateShows: [] },
+    exclusive: { count: 0, earnings: 0, exclusiveShows: [] },
+    group: { count: 0, earnings: 0, groupShows: [] },
+  };
+  const seen = new Set();
+  const activeShows = { ticket: null, private: null, exclusive: null, group: null };
+  const pendingParticipants = { ticket: [], group: [] };
+  const pendingTicketSales = [];
+  const ticketSales = [];
+  const ticketSalesByShow = new Map();
+  let lastEndedTicketShow = null;
+  const events = getDailyCapturedEvents(daily)
+    .map((event, index) => ({
+      event,
+      index,
+      timestamp: Number(event?.timestamp ?? event?.time) || 0,
+    }))
+    .sort((left, right) => left.timestamp - right.timestamp || left.index - right.index);
+  const addParticipant = (show, username) => {
+    const name = String(username || "").trim();
+    if (!name || name.toLocaleLowerCase() === "usuário") return;
+    const normalizedName = name.toLocaleLowerCase();
+    const existing = show.participantEntries.find((participant) =>
+      participant.name.toLocaleLowerCase() === normalizedName
+    );
+    if (existing) {
+      existing.count += 1;
+      return;
+    }
+    show.participants.push(name);
+    show.participantEntries.push({ name, count: 1 });
+  };
+  const attachManualShowFields = (show, showId) => {
+    Object.defineProperties(show, {
+      id: { value: showId, enumerable: false },
+      participants: { value: [], enumerable: false },
+      participantEntries: { value: [], enumerable: false },
+    });
+    return show;
+  };
+  const attachRecentParticipants = (showType, show, startedAt) => {
+    pendingParticipants[showType].forEach((participant) => {
+      const elapsed = startedAt - participant.timestamp;
+      if (elapsed >= 0 && elapsed <= 15000) {
+        addParticipant(show, participant.username);
+      }
+    });
+    pendingParticipants[showType] = [];
+  };
+  const addTicketSaleToShow = (show, sale) => {
+    sale.show = show;
+    show.ticketsSold += 1;
+    const username = String(sale.event.user || "").trim();
+    if (username && username !== "—" && username.toLocaleLowerCase() !== "usuário") {
+      addParticipant(show, username);
+    }
+    if (!ticketSalesByShow.has(show)) ticketSalesByShow.set(show, []);
+    ticketSalesByShow.get(show).push(sale);
+  };
+  const attachRecentTicketSales = (show, startedAt) => {
+    pendingTicketSales.forEach((sale) => {
+      const elapsed = startedAt - sale.timestamp;
+      if (elapsed >= 0 && elapsed <= 15000) addTicketSaleToShow(show, sale);
+    });
+    pendingTicketSales.length = 0;
+  };
+
+  events.forEach(({ event, index, timestamp }) => {
+    if (!event || typeof event !== "object") return;
+    const type = String(event.type || "");
+    const item = String(event.item || "");
+    const combined = `${type} ${item}`
+      .toLocaleLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+    const id = String(event.id || "");
+    const eventKey = id || (timestamp > 0
+      ? `${timestamp}|${type}|${item}|${String(event.user || "")}|${String(event.price ?? event.tokens ?? "")}`
+      : `event-${index}`);
+    if (seen.has(eventKey)) return;
+    seen.add(eventKey);
+
+    const participantType = String(event.showParticipantType || "");
+    if (participantType === "ticket" || participantType === "group") {
+      const username = String(event.user || event.item || "").trim();
+      const activeShow = activeShows[participantType];
+      if (activeShow) {
+        addParticipant(activeShow, username);
+      } else if (
+        participantType === "ticket" &&
+        lastEndedTicketShow &&
+        timestamp >= lastEndedTicketShow.endedAt &&
+        timestamp - lastEndedTicketShow.endedAt <= 15000
+      ) {
+        addParticipant(lastEndedTicketShow, username);
+      } else {
+        pendingParticipants[participantType].push({ timestamp, username });
+      }
+      return;
+    }
+
+    const isTicketPurchase = /ingresso ticket/.test(combined) ||
+      /compra de ingresso/.test(combined);
+    if (isTicketPurchase) {
+      const activeTicketShow = activeShows.ticket;
+      const sale = { event, timestamp, show: null };
+      ticketSales.push(sale);
+      stats.ticket.ticketsSold += 1;
+      if (activeTicketShow) {
+        addTicketSaleToShow(activeTicketShow, sale);
+      } else if (
+        lastEndedTicketShow &&
+        timestamp >= lastEndedTicketShow.endedAt &&
+        timestamp - lastEndedTicketShow.endedAt <= 15000
+      ) {
+        addTicketSaleToShow(lastEndedTicketShow, sale);
+      } else {
+        pendingTicketSales.push(sale);
+      }
+      return;
+    }
+
+    const showType = /show em grupo/.test(combined)
+      ? "group"
+      : /show privado/.test(combined)
+        ? "private"
+        : /show exclusivo/.test(combined)
+          ? "exclusive"
+          : /ticket show|show (?:por|de) (?:tickets?|ingressos?|bilhetes?|entradas?)/.test(combined)
+            ? "ticket"
+            : "";
+    if (!showType) return;
+
+    if (event.manualShowTargetId) {
+      const showList = showType === "private"
+        ? stats.private.privateShows
+        : showType === "exclusive"
+          ? stats.exclusive.exclusiveShows
+          : [];
+      const targetShow = showList.find((show) => show.id === String(event.manualShowTargetId));
+      if (!targetShow) return;
+      const amount = Math.max(0, Number(event.manualAmount) || 0);
+      stats[showType].earnings += amount;
+      targetShow.earnings += amount;
+      addParticipant(targetShow, event.user);
+      return;
+    }
+
+    const isEnd = event.showBoundary === "end" ||
+      (event.showBoundary !== "start" && /\bfim\b/.test(combined));
+    if (isEnd) {
+      if (activeShows[showType]) {
+        activeShows[showType].endedAt = timestamp;
+        if (showType === "ticket") lastEndedTicketShow = activeShows.ticket;
+        activeShows[showType] = null;
+      } else if (
+        showType === "ticket" &&
+        stats.ticket.ticketShows.length === 0 &&
+        (pendingTicketSales.length || pendingParticipants.ticket.length)
+      ) {
+        const priorActivityTimes = [
+          ...pendingTicketSales.map((sale) => sale.timestamp),
+          ...pendingParticipants.ticket.map((participant) => participant.timestamp),
+        ].filter((activityTime) => activityTime < timestamp);
+        if (priorActivityTimes.length) {
+          const inferredShow = {
+            startedAt: Math.min(...priorActivityTimes),
+            endedAt: timestamp,
+            inferredStart: true,
+            ticketPrice: 0,
+            ticketsSold: 0,
+            unpricedTicketsSold: 0,
+            earnings: 0,
+            ticketPriceBreakdown: [],
+            participants: [],
+            participantEntries: [],
+          };
+          stats.ticket.count += 1;
+          stats.ticket.ticketShows.push(inferredShow);
+          pendingTicketSales.forEach((sale) => addTicketSaleToShow(inferredShow, sale));
+          pendingTicketSales.length = 0;
+          pendingParticipants.ticket.forEach((participant) =>
+            addParticipant(inferredShow, participant.username)
+          );
+          pendingParticipants.ticket = [];
+          lastEndedTicketShow = inferredShow;
+        }
+      }
+      return;
+    }
+
+    const isStart = event.showBoundary === "start" ||
+      (event.showBoundary !== "end" && /\binicio\b/.test(combined));
+    if (isStart && showType === "ticket" && activeShows.ticket) {
+      activeShows.ticket.endedAt = timestamp;
+      lastEndedTicketShow = activeShows.ticket;
+      activeShows.ticket = null;
+    }
+    if (
+      isStart &&
+      event.manualNewShow === true &&
+      (showType === "private" || showType === "exclusive")
+    ) {
+      const manualShow = attachManualShowFields({
+        startedAt: null,
+        endedAt: null,
+        earnings: Math.max(0, Number(event.manualAmount) || 0),
+        manual: true,
+      }, id || eventKey);
+      stats[showType].count += 1;
+      stats[showType].earnings += manualShow.earnings;
+      if (showType === "private") stats.private.privateShows.push(manualShow);
+      else stats.exclusive.exclusiveShows.push(manualShow);
+      if (event.user) addParticipant(manualShow, event.user);
+      return;
+    }
+
+    if (isStart) {
+      stats[showType].count += 1;
+      if (showType === "ticket") {
+        activeShows.ticket = {
+          startedAt: timestamp,
+          endedAt: null,
+          ticketPrice: Math.max(0, Number(event.ticketPrice) || 0),
+          ticketsSold: 0,
+          unpricedTicketsSold: 0,
+          earnings: 0,
+          ticketPriceBreakdown: [],
+          participants: [],
+          participantEntries: [],
+        };
+        stats.ticket.ticketShows.push(activeShows.ticket);
+        attachRecentParticipants("ticket", activeShows.ticket, timestamp);
+        attachRecentTicketSales(activeShows.ticket, timestamp);
+      } else if (showType === "group") {
+        activeShows.group = {
+          startedAt: timestamp,
+          endedAt: null,
+          earnings: 0,
+          participants: [],
+          participantEntries: [],
+        };
+        stats.group.groupShows.push(activeShows.group);
+        attachRecentParticipants("group", activeShows.group, timestamp);
+      } else if (showType === "private") {
+        activeShows.private = attachManualShowFields({
+          startedAt: timestamp,
+          endedAt: null,
+          earnings: 0,
+        }, id || eventKey);
+        stats.private.privateShows.push(activeShows.private);
+      } else {
+        activeShows.exclusive = attachManualShowFields({
+          startedAt: timestamp,
+          endedAt: null,
+          earnings: 0,
+        }, id || eventKey);
+        stats.exclusive.exclusiveShows.push(activeShows.exclusive);
+      }
+      if (event.manualEntry === true && event.user) {
+        addParticipant(activeShows[showType], event.user);
+      }
+    }
+
+    if (isStart || /\b1 min\b/.test(combined)) {
+      const rawAmount = Number(event.tokens ?? event.price);
+      const amount = Number.isFinite(rawAmount) ? Math.max(0, rawAmount) : 0;
+      stats[showType].earnings += amount;
+      if (showType !== "ticket" && activeShows[showType]) {
+        activeShows[showType].earnings += amount;
+      }
+    }
+  });
+
+  let unassignedTicketSales = 0;
+  ticketSales.forEach((sale) => {
+    if (!sale.show) unassignedTicketSales += 1;
+  });
+  stats.ticket.earnings = 0;
+  stats.ticket.unpricedTicketsSold = unassignedTicketSales;
+  stats.ticket.ticketShows.forEach((show) => {
+    const sales = ticketSalesByShow.get(show) || [];
+    const markerPrice = Math.max(0, Number(show.ticketPrice) || 0);
+    let pricedQuantity = 0;
+    let salePrice = markerPrice;
+    if (salePrice > 0) {
+      pricedQuantity = sales.length;
+    } else {
+      const priceCounts = new Map();
+      sales.forEach((sale) => {
+        const observedPrice = Math.max(
+          0,
+          Number(sale.event.ticketPrice ?? sale.event.price ?? sale.event.tokens) || 0,
+        );
+        if (observedPrice > 0) {
+          priceCounts.set(observedPrice, (priceCounts.get(observedPrice) || 0) + 1);
+        }
+      });
+      const candidates = Array.from(priceCounts.entries()).sort(
+        ([priceA, countA], [priceB, countB]) => countB - countA || priceA - priceB,
+      );
+      if (candidates.length && candidates[0][1] >= 2 &&
+          (candidates.length === 1 || candidates[0][1] > candidates[1][1])) {
+        [salePrice, pricedQuantity] = candidates[0];
+        show.ticketPrice = salePrice;
+      }
+    }
+    show.ticketsSold = sales.length;
+    show.unpricedTicketsSold = sales.length - pricedQuantity;
+    show.earnings = salePrice * pricedQuantity;
+    show.ticketPriceBreakdown = pricedQuantity > 0
+      ? [{ price: salePrice, quantity: pricedQuantity }]
+      : [];
+    stats.ticket.earnings += show.earnings;
+    stats.ticket.unpricedTicketsSold += show.unpricedTicketsSold;
+  });
+
+  return stats;
+}
+
+export function buildDailyShowCounts(daily = {}) {
+  const stats = buildDailyShowStats(daily);
+  return {
+    ticket: stats.ticket.count,
+    private: stats.private.count,
+    exclusive: stats.exclusive.count,
+    group: stats.group.count,
+  };
 }
 
 function getDailyCapturedEventEntries(daily) {
@@ -622,6 +1036,7 @@ function getDailyCapturedEventEntries(daily) {
 
 function isCapturedShowOrTicket(event) {
   if (!event || typeof event !== "object") return false;
+  if (event.manualEntry === true) return false;
   const type = String(event.type || "").trim();
   const item = String(event.item || event.menuOption || event.rouletteOutcome || "").trim();
   const normalizedType = `${type} ${item}`
@@ -776,6 +1191,11 @@ export function buildAudienceChartPoints(
   (Array.isArray(minuteRows) ? minuteRows : []).forEach((minute) => {
     const [hour, minuteOfHour] = String(minute?.minute || "").split(":").map(Number);
     if (!Number.isInteger(hour) || !Number.isInteger(minuteOfHour)) return;
+    if (
+      minute?.netSeconds !== undefined &&
+      minute?.netSeconds !== null &&
+      Number(minute.netSeconds) <= 0
+    ) return;
 
     const startMinute = Math.floor((hour * 60 + minuteOfHour) / step) * step;
     let bucket = buckets.get(startMinute);
@@ -987,6 +1407,7 @@ export function buildPeriodReportSummary({
   const leagueEngagementTotals = new Map();
   const goalTimeline = [];
   const showTimeline = [];
+  const showStats = buildDailyShowStats();
   let periodNetSeconds = 0;
   let periodBruteSeconds = 0;
   const heatmap = WEEKDAY_NAMES.map(() => Array.from({ length: 24 }, () => ({
@@ -1032,10 +1453,12 @@ export function buildPeriodReportSummary({
   const donorTotals = {};
   const suspectTotals = new Map();
   const mutedTotals = new Map();
+  const mutedLogRows = [];
   let moderationLogCount = 0;
   let moderationSuccessCount = 0;
   let moderationFailureCount = 0;
   let moderationPendingCount = 0;
+  const moderationLogs = [];
   let bestTip = null;
   let periodTotalTips = 0;
   let periodTotalMessages = 0;
@@ -1044,6 +1467,26 @@ export function buildPeriodReportSummary({
     const shortDate = `${dateKey.slice(8, 10)}/${dateKey.slice(5, 7)}`;
     const entry = entryByDate.get(dateKey);
     const daily = dailyByDate[dateKey] || {};
+    const manualEvents = getManualEarningEvents(daily);
+    const dailyShowStats = buildDailyShowStats(daily);
+    ["ticket", "private", "exclusive", "group"].forEach((showType) => {
+      showStats[showType].count += dailyShowStats[showType].count;
+      showStats[showType].earnings += dailyShowStats[showType].earnings;
+    });
+    showStats.ticket.ticketsSold += dailyShowStats.ticket.ticketsSold;
+    showStats.ticket.unpricedTicketsSold += dailyShowStats.ticket.unpricedTicketsSold;
+    showStats.ticket.ticketShows.push(
+      ...dailyShowStats.ticket.ticketShows.map((show) => ({ ...show, dateKey })),
+    );
+    showStats.group.groupShows.push(
+      ...dailyShowStats.group.groupShows.map((show) => ({ ...show, dateKey })),
+    );
+    showStats.private.privateShows.push(
+      ...dailyShowStats.private.privateShows.map((show) => copyShowWithParticipants(show, dateKey)),
+    );
+    showStats.exclusive.exclusiveShows.push(
+      ...dailyShowStats.exclusive.exclusiveShows.map((show) => copyShowWithParticipants(show, dateKey)),
+    );
     const minuteBuckets = Object.values(daily.minuteBuckets || {});
     const tokensUsersDailyTotals = minuteBuckets.reduce((totals, minute) => {
       totals.sum += Math.max(0, Number(minute?.tokensUsersSum) || 0);
@@ -1163,7 +1606,7 @@ export function buildPeriodReportSummary({
     const newTippers = Math.max(0, Number(audience?.newTippers) || 0);
     const returningTippers = Math.max(0, Number(audience?.returningTippers) || 0);
     let hasEventSummary = false;
-    Object.entries(daily.eventSummaryTotals || {}).forEach(([key, eventSummary]) => {
+    Object.entries(addManualEarningSummary(daily.eventSummaryTotals, manualEvents)).forEach(([key, eventSummary]) => {
       const count = Math.max(0, Number(eventSummary?.count) || 0);
       const tokens = Math.max(0, Number(eventSummary?.tokens) || 0);
       if (count <= 0 && tokens <= 0) return;
@@ -1231,22 +1674,44 @@ export function buildPeriodReportSummary({
       ? daily.mutedUsers
       : Object.values(daily.mutedUsers || {});
     const mutedNames = new Set();
+    const deletedMutedUserIds = new Set(
+      Array.isArray(daily.mutedUserDeletedIds)
+        ? daily.mutedUserDeletedIds.map((id) => String(id))
+        : [],
+    );
     dailyMutedUsers.forEach((muted) => {
       const username = String(muted?.username || "").trim();
       const normalized = username.toLocaleLowerCase();
       if (!normalized) return;
       mutedNames.add(normalized);
+      const timestamp = Number(muted.timestamp ?? muted._timestamp) || 0;
+      if (deletedMutedUserIds.has(`${normalized}|${timestamp}`)) return;
+      const lastMessage = String(
+        muted.lastMessage ||
+        (Array.isArray(muted.recentMessages) ? muted.recentMessages[0] : "") ||
+        "",
+      ).trim();
+      mutedLogRows.push({
+        ...muted,
+        username,
+        dateKey,
+        timestamp,
+        lastMessage,
+      });
       const total = mutedTotals.get(normalized) || {
         username,
         days: 0,
         mutedBy: "",
         timestamp: 0,
+        lastMessage: "",
+        dateKey: "",
       };
       total.days += 1;
-      const timestamp = Number(muted.timestamp ?? muted._timestamp) || 0;
       if (timestamp >= total.timestamp) {
         total.timestamp = timestamp;
         total.mutedBy = String(muted.mutedBy || "");
+        total.dateKey = dateKey;
+        if (lastMessage) total.lastMessage = lastMessage;
       }
       mutedTotals.set(normalized, total);
     });
@@ -1274,14 +1739,33 @@ export function buildPeriodReportSummary({
     const dailyModerationLogs = Array.isArray(daily.moderationLogs)
       ? daily.moderationLogs
       : Object.values(daily.moderationLogs || {});
-    dailyModerationLogs.forEach((log) => {
-      const timestamp = Number(log?.timestamp);
-      if (!timestamp) return;
-      const parts = getSaoPauloDateParts(timestamp);
-      if (parts && parts.hour >= 0 && parts.hour < 24) {
-        activityTimeline[parts.hour].moderation += 1;
-      }
-    });
+    dailyModerationLogs.forEach((log) => moderationLogs.push({ ...log, dateKey }));
+    const hourlyModeration = daily.moderationHourlyTotals;
+    if (
+      hourlyModeration &&
+      typeof hourlyModeration === "object" &&
+      Object.keys(hourlyModeration).length > 0
+    ) {
+      Object.entries(hourlyModeration).forEach(([hour, count]) => {
+        const hourIndex = Number(hour);
+        if (
+          Number.isInteger(hourIndex) &&
+          hourIndex >= 0 &&
+          hourIndex < 24
+        ) {
+          activityTimeline[hourIndex].moderation += Math.max(0, Number(count) || 0);
+        }
+      });
+    } else {
+      dailyModerationLogs.forEach((log) => {
+        const timestamp = Number(log?.timestamp);
+        if (!timestamp) return;
+        const parts = getSaoPauloDateParts(timestamp);
+        if (parts && parts.hour >= 0 && parts.hour < 24) {
+          activityTimeline[parts.hour].moderation += 1;
+        }
+      });
+    }
 
     getDailyCapturedEvents(daily).forEach((event) => {
       const timestamp = Number(event?.timestamp ?? event?.time);
@@ -1434,7 +1918,8 @@ export function buildPeriodReportSummary({
       }
     });
 
-    const tokens = Math.round(Number(daily.totalTokensDay || entry?.totalTokens) || 0);
+    const tokens = Math.round(Number(daily.totalTokensDay || entry?.totalTokens) || 0) +
+      getManualEarningTotal(manualEvents);
     const peakViewers = Math.max(
       Number(daily.peakViewersDay) || 0,
       Number(entry?.peakViewers) || 0,
@@ -1756,6 +2241,13 @@ export function buildPeriodReportSummary({
     bestTokenWeekday,
     eventSummaryTotals,
     eventSummaryDays,
+    showCounts: {
+      ticket: showStats.ticket.count,
+      private: showStats.private.count,
+      exclusive: showStats.exclusive.count,
+      group: showStats.group.count,
+    },
+    showStats,
     menuOptionTotals,
     menuOptionRows: buildNamedTotalRows(menuOptionTotals),
     rouletteOutcomeTotals,
@@ -1769,10 +2261,12 @@ export function buildPeriodReportSummary({
     mutedRows: Array.from(mutedTotals.values()).sort(
       (a, b) => b.days - a.days || b.timestamp - a.timestamp,
     ),
+    mutedLogRows: mutedLogRows.sort((a, b) => b.timestamp - a.timestamp),
     moderationLogCount,
     moderationSuccessCount,
     moderationFailureCount,
     moderationPendingCount,
+    moderationLogs,
     periodUserPeak,
     periodUserAvg,
     periodLeaguePeak,
@@ -1868,12 +2362,13 @@ export function buildReportData(room, daily) {
   const modelName = room?.modelName || room?.modelId || "Modelo";
   const dateBr = formatHistoryDate(room);
   const dateKey = room?.dateKey || daily?.date || "";
+  const manualEvents = getManualEarningEvents(daily);
 
   const totalTokens = Math.round(
     Number(daily?.totalTokensDay) > 0
       ? Number(daily.totalTokensDay)
       : Number(daily?.dailyTokens) || Number(room?.totalTokens) || 0
-  );
+  ) + getManualEarningTotal(manualEvents);
 
   const peakViewers = Math.max(
     Number(daily?.peakViewersDay) || 0,
@@ -1894,6 +2389,10 @@ export function buildReportData(room, daily) {
     .sort((a, b) => (Number(a.startedAtTs) || 0) - (Number(b.startedAtTs) || 0));
   const liveSessions = savedLiveSessions
     .map((session, index) => {
+      const sessionManualEvents = manualEvents.filter((event) =>
+        event.scope === "live" &&
+        String(event.sessionId || "") === String(session.sessionId || ""),
+      );
       const laterSessionStartedAfterEnd = savedLiveSessions
         .slice(index + 1)
         .some((laterSession) =>
@@ -1903,9 +2402,21 @@ export function buildReportData(room, daily) {
         );
       const sessionMinuteRows = normalizeMinuteBuckets(session.minuteBuckets);
       const sessionViewerSamples = Number(session.viewerSamples) || 0;
+      const sessionEvents = getDailyCapturedEvents(session);
+      const sessionEventIds = new Set(sessionEvents.map((event) => String(event?.id || "")));
       return {
         ...session,
         ...(laterSessionStartedAfterEnd ? { status: "ENCERRADA" } : {}),
+        tokens: Math.max(0, Number(session.tokens) || 0) +
+          getManualEarningTotal(sessionManualEvents),
+        capturedEvents: [
+          ...sessionEvents,
+          ...sessionManualEvents.filter((event) => !sessionEventIds.has(String(event.id || ""))),
+        ],
+        eventSummaryTotals: addManualEarningSummary(
+          session.eventSummaryTotals,
+          sessionManualEvents,
+        ),
         modelName,
         minuteRows: sessionMinuteRows,
         avgViewers:
@@ -1921,6 +2432,13 @@ export function buildReportData(room, daily) {
 
   const minuteRows = normalizeMinuteBuckets(daily?.minuteBuckets);
   const capturedEvents = getDailyCapturedEvents(daily);
+  const showStats = buildDailyShowStats(daily);
+  const showCounts = {
+    ticket: showStats.ticket.count,
+    private: showStats.private.count,
+    exclusive: showStats.exclusive.count,
+    group: showStats.group.count,
+  };
   const largestTip = getDailyLargestTip(daily);
   const topTipCandidates = capturedEvents.map(normalizeCapturedTip).filter(Boolean);
   if (largestTip && !topTipCandidates.some((tip) =>
@@ -1966,6 +2484,8 @@ export function buildReportData(room, daily) {
     bruteSeconds,
     netSeconds,
     liveSessions,
+    showCounts,
+    showStats,
     suspectBots,
     menuOptionTotals: daily?.menuOptionTotals || {},
     menuOptionRows: buildNamedTotalRows(daily?.menuOptionTotals),
@@ -1976,10 +2496,20 @@ export function buildReportData(room, daily) {
     totalMessages: dailyTotalMessages,
     largestTip,
     topTipRows,
-    mutedUsers: Array.isArray(daily?.mutedUsers) ? daily.mutedUsers : [],
+    mutedUsers: (Array.isArray(daily?.mutedUsers)
+      ? daily.mutedUsers
+      : Object.values(daily?.mutedUsers || {})).filter((muted) => {
+        const username = String(muted?.username || "").trim().toLocaleLowerCase();
+        const timestamp = Number(muted?.timestamp ?? muted?._timestamp) || 0;
+        const deletedIds = Array.isArray(daily?.mutedUserDeletedIds)
+          ? daily.mutedUserDeletedIds
+          : [];
+        return !deletedIds.includes(`${username}|${timestamp}`);
+      }),
     moderationStats: daily?.moderationStats || null,
     moderationLogs: Array.isArray(daily?.moderationLogs) ? daily.moderationLogs : [],
     audienceStats: daily?.audienceStats || {},
+    eventSummaryTotals: addManualEarningSummary(daily?.eventSummaryTotals, manualEvents),
     minuteRows,
     uPeak,
     uAvg,

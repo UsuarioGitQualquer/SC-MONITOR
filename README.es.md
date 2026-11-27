@@ -1,9 +1,9 @@
-SC MONITOR - VERSION 5.0
+SC MONITOR - VERSIÓN 5.0
 ========================================================================
 
-       Local audience, chat, tips, goals, and moderation dashboard
+       Panel local de audiencia, chat, propinas, metas y moderación
 
-                              for Stripchat
+                             para Stripchat
 ========================================================================
 
 SC Monitor es una extensión para navegadores Chromium que supervisa en
@@ -156,8 +156,10 @@ COMPARACIONES POR DÍA DE LA SEMANA Y TRANSPARENCIA DE LAS MÉTRICAS
    - Hay cronómetros independientes para el tiempo total transcurrido y el
      tiempo neto activo.
 
-   - En el modo Monitorear sala, el aviso de sala offline espera 2 minutos y
-     los mensajes nuevos prolongan la espera antes de terminar el monitoreo.
+   - En el modo Monitorear sala, cuando la modelo queda desconectada, SC
+     Monitor espera al menos 2 minutos. Cada mensaje nuevo en el chat reinicia
+     la espera. Si pasan 2 minutos sin mensajes, termina la transmisión; si la
+     modelo vuelve después, empieza una nueva.
 
    - El panel se puede arrastrar desde el encabezado o la barra inferior
      interna, que muestra la fecha y el logo. Se puede ajustar el tamaño desde
@@ -173,11 +175,19 @@ COMPARACIONES POR DÍA DE LA SEMANA Y TRANSPARENCIA DE LAS MÉTRICAS
    - Exporta informes completos de usuarios, visitas, tiempo y tokens en
      formato CSV.
 
-   - Hay informes detallados en una página dedicada de la extensión, que se
-     abre desde el popup o el panel. Los informes por período también muestran
-     la evolución diaria de usuarios nuevos y recurrentes cuando se guardaron
-     esos datos. El rey actual de cada día también se registra y aparece en
-     los informes diarios y los resúmenes por período.
+   - La Página de Informes es la página dedicada de la extensión. Se abre desde
+     el popup o con el botón "↗ Página del informe" de la pestaña Informe del
+     panel. Incluye
+     informes detallados, filtros de modelo y fecha, exportación CSV y
+     herramientas para importar/exportar copias de seguridad y borrar datos.
+     Los informes por período también muestran la evolución diaria de usuarios
+     nuevos y recurrentes cuando se guardaron esos datos. El rey actual de cada
+     día también se registra y aparece en los informes diarios y los resúmenes
+     por período. La sección Shows resume la cantidad y las ganancias estimadas.
+     Los shows con ticket también muestran las entradas vendidas y su precio;
+     los shows con ticket o grupales tienen listas desplegables de participantes
+     cuando se registraron los nombres. Cada usuario aparece una sola vez con
+     la cantidad de veces que entró.
 
    - Los intervalos de los gráficos se seleccionan automáticamente según la
      duración registrada:
@@ -191,17 +201,21 @@ COMPARACIONES POR DÍA DE LA SEMANA Y TRANSPARENCIA DE LAS MÉTRICAS
 
    CÓMO LEER LOS GRÁFICOS DE LOS INFORMES
 
-   - La página ofrece tres vistas: Día, Sesión y Período. Elige el modelo/sala
-     y los datos disponibles. En el informe por período, define las fechas y
-     agrupa los resultados por día, semana o mes. También puedes comparar dos
-     períodos.
+   - En la Página de Informes hay tres vistas: Día, Live y Período. Elige el
+     modelo/sala y los datos disponibles. En el informe por período, define las
+     fechas y agrupa los resultados por día, semana o mes. También puedes
+     comparar dos períodos.
 
-   - En los informes de Día y Sesión, el gráfico combinado muestra los tokens
-     por intervalo junto con la evolución de la audiencia. El informe diario
-     marca los shows registrados. Los gráficos de flujo detallan tokens y
-     usuarios listados; elige el tamaño de los bloques o usa Automático para
-     ajustarlo a la duración registrada. Los tokens sin hora se muestran aparte
-     y no se distribuyen artificialmente entre los bloques.
+   - En los informes de Día y Live, el gráfico combinado muestra los tokens
+     por intervalo junto con la evolución de la audiencia y marca los tipos de
+     show registrados. La sección Shows resume la cantidad y las ganancias
+     estimadas, e indica la hora de inicio y fin de cada show. También incluye
+     listas desplegables de participantes en cada show con ticket o show grupal;
+     cada usuario aparece una vez con su cantidad de entradas.
+     Los gráficos de flujo detallan tokens y usuarios listados;
+     elige el tamaño de los bloques o usa Automático para ajustarlo a la duración
+     registrada. Los tokens sin hora se muestran aparte y no se distribuyen
+     artificialmente entre los bloques.
 
    - Los gráficos e indicadores de audiencia del informe diario muestran la
      retención, los picos/promedios de usuarios y la distribución por liga.
@@ -210,7 +224,8 @@ COMPARACIONES POR DÍA DE LA SEMANA Y TRANSPARENCIA DE LAS MÉTRICAS
      clasificaciones muestran las mayores propinas individuales, las opciones
      del menú y los resultados registrados de la ruleta. Cuando hay datos, las
      tablas también muestran lives, donantes, usuarios sospechosos y usuarios
-     silenciados.
+     silenciados. El resumen diario también cuenta los shows por tipo: ticket,
+     privado, exclusivo y grupal.
 
    - El gráfico combinado del informe por Sesión muestra la audiencia y las
      ganancias de la live en los intervalos seleccionados. También incluye el
@@ -329,8 +344,9 @@ PESTAÑAS
 
    - 📑 Informe: compara datos de la sesión, del día o de un período.
      Selecciona la sala y las fechas para consultar los gráficos y las
-     métricas; usa "Página" para abrir los informes detallados. "Copiar
-     resumen" y "CSV" exportan los datos del informe seleccionado.
+     métricas; el botón "↗ Página del informe" abre la Página de Informes con
+     los informes detallados. "Copiar resumen" y "CSV" exportan los datos del informe
+     seleccionado.
 
 
 CONTROLES DEL PANEL
@@ -349,12 +365,15 @@ CONTROLES DEL PANEL
      inicia el monitoreo por sí sola.
 
    - Monitorear sala (OFF ⇄ ON): sigue automáticamente la sala abierta.
-     Inicia la recolección cuando detecta una transmisión en vivo y termina
-     después de 2 minutos offline sin mensajes nuevos en el chat. Los
-     mensajes prolongan la espera; volver al directo cancela la parada. Al
-     navegar a otra sala, termina la recolección de la sala monitoreada.
-     Desactivar esta opción deshabilita la automatización, pero no pausa una
-     sesión que ya esté monitoreando; usa "Pausar monitor".
+     Inicia la recolección cuando detecta una transmisión en vivo. Cuando la
+     modelo queda desconectada, espera al menos 2 minutos; cada mensaje nuevo
+     en el chat reinicia la espera. Si vuelve antes de que se detenga el
+     monitoreo, continúa la misma transmisión; si vuelve después, empieza otra.
+     Actualizar la página o salir y volver a la sala sigue iniciando una nueva
+     transmisión, como hasta ahora. Al navegar a otra sala, termina la
+     recolección de la sala monitoreada. Desactivar esta opción deshabilita la
+     automatización, pero no pausa un monitoreo que ya esté en curso; usa
+     "Pausar monitor".
 
    - Fijar: mantiene el panel abierto al hacer clic fuera de él. Para cerrarlo,
      usa "Cerrar".
@@ -506,6 +525,8 @@ Permitir el uso en ventanas de incógnito (opcional):
    - Desplázate hacia abajo hasta "Permitir en modo incógnito".
    - Activa la opción para permitir la extensión en páginas de Stripchat
      abiertas en una ventana de incógnito.
+   - Los informes se abren en una ventana normal para usar los datos
+     compartidos con el resto de la extensión.
 
 
 ------------------------------------------------------------------------
@@ -527,4 +548,3 @@ Permitir el uso en ventanas de incógnito (opcional):
      a otros servidores.
 
 ========================================================================
-

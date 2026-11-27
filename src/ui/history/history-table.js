@@ -17,15 +17,31 @@ export function formatStorageBytes(bytes) {
   return `${(value / (1024 * 1024)).toFixed(2)} MiB`;
 }
 
-export function buildHistoryTableHtml(history = {}, modelSizes = {}) {
-  const keys = Object.keys(history).sort((a, b) => {
+export function getCurrentLocalDateKey(dateInput = new Date()) {
+  const date = dateInput instanceof Date ? dateInput : new Date(dateInput);
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+export function buildHistoryTableHtml(history = {}, modelSizes = {}, todayKey = getCurrentLocalDateKey()) {
+  const keys = Object.keys(history).filter((entryKey) => {
+    const room = history[entryKey];
+    const dateKey = String(room?.dateKey || entryKey.split("::").at(-1) || "");
+    return dateKey === todayKey;
+  }).sort((a, b) => {
     const dateA = String(history[a]?.dateKey || "");
     const dateB = String(history[b]?.dateKey || "");
     return dateB.localeCompare(dateA);
   });
 
   if (keys.length === 0) {
-    return `<tr><td colspan="5" style="text-align:center; color:#8b92b8; padding: 16px;">Nenhuma sala salva no histórico.</td></tr>`;
+    return `<tr><td colspan="5" style="text-align:center; color:#8b92b8; padding: 16px;">Nenhuma sala salva hoje.</td></tr>`;
   }
 
   return keys

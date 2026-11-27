@@ -6,19 +6,11 @@ import {
 } from "../src/ui/history/history-table.js";
 
 test("renders an empty-state row when history has no entries", () => {
-  assert.match(buildHistoryTableHtml(), /Nenhuma sala salva no histórico/);
+  assert.match(buildHistoryTableHtml(), /Nenhuma sala salva hoje/);
 });
 
 test("sorts history by date and escapes room values and action keys", () => {
   const html = buildHistoryTableHtml({
-    'model"><script>': {
-      dateKey: "2026-11-18",
-      modelId: "older",
-      modelName: "<img src=x onerror=alert(1)>",
-      peakViewers: 4,
-      avgViewers: 2,
-      totalTokens: 10,
-    },
     "newer::2026-11-19": {
       dateKey: "2026-11-19",
       modelId: "newer",
@@ -30,7 +22,15 @@ test("sorts history by date and escapes room values and action keys", () => {
       firstLiveStart: "10:00",
       lastLiveEnd: "11:00",
     },
-  });
+    'model"><script>': {
+      dateKey: "2026-11-19",
+      modelId: "older",
+      modelName: "<img src=x onerror=alert(1)>",
+      peakViewers: 4,
+      avgViewers: 2,
+      totalTokens: 10,
+    },
+  }, {}, "2026-11-19");
 
   assert.ok(html.indexOf("Newer") < html.indexOf("&lt;img"));
   assert.match(html, /data-key="model&quot;&gt;&lt;script&gt;"/);
@@ -53,7 +53,25 @@ test("formats storage sizes and renders the recorded size per model", () => {
     },
   }, {
     "model-a": 2 * 1024 * 1024,
-  });
+  }, "2026-11-20");
 
   assert.match(html, /Dados gravados: 2\.00 MiB/);
+});
+
+test("shows only entries from the current local day", () => {
+  const html = buildHistoryTableHtml({
+    "today::2026-11-26": {
+      dateKey: "2026-11-26",
+      modelId: "today",
+      modelName: "Modelo Hoje",
+    },
+    "older::2026-11-25": {
+      dateKey: "2026-11-25",
+      modelId: "older",
+      modelName: "Modelo Ontem",
+    },
+  }, {}, "2026-11-26");
+
+  assert.match(html, /Modelo Hoje/);
+  assert.doesNotMatch(html, /Modelo Ontem/);
 });

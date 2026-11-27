@@ -250,6 +250,14 @@ test("persists daily menu, roulette, mute, and moderation metrics without double
   }];
   bucket.moderationStats = { attempts: 1, successes: 0, failures: 0, pending: 1 };
   bucket.moderationPendingById = { "moderation-1": "PENDENTE" };
+  bucket.moderationLogs = [{
+    id: "moderation-1",
+    user: "SpamUser",
+    message: "spam",
+    status: "PENDENTE",
+    timestamp,
+  }];
+  bucket.moderationHourlyTotals = { 12: 1 };
 
   const firstSave = await save();
   const dailyKey = `scm:model:test-model:daily:${TEST_DAY}`;
@@ -265,6 +273,7 @@ test("persists daily menu, roulette, mute, and moderation metrics without double
     tokens: 0,
   });
   assert.equal(storage[dailyKey].mutedUsers[0].username, "MutedUser");
+  assert.equal(storage[dailyKey].mutedUsers[0].lastMessage, "spam");
   assert.deepEqual(storage[dailyKey].suspectBots.map((suspect) => suspect.username), ["VisibleBot"]);
   assert.equal(storage[dailyKey].largestTip.username, "TopTipper");
   assert.equal(storage[dailyKey].largestTip.tokens, 500);
@@ -274,6 +283,8 @@ test("persists daily menu, roulette, mute, and moderation metrics without double
     failures: 0,
     pending: 1,
   });
+  assert.equal(storage[dailyKey].moderationLogs[0].id, "moderation-1");
+  assert.deepEqual(storage[dailyKey].moderationHourlyTotals, { 12: 1 });
 
   const secondSave = await save();
   assert.equal(secondSave.ok, true);
@@ -281,12 +292,51 @@ test("persists daily menu, roulette, mute, and moderation metrics without double
   assert.equal(storage[dailyKey].rouletteOutcomeTotals.Gold.count, 1);
   assert.equal(storage[dailyKey].moderationStats.attempts, 1);
 
+  state.mutedUsersDetails = [{
+    username: "MutedUser",
+    mutedBy: "Moderator",
+    lastMessage: "spam",
+    timestamp,
+  }];
+  bucket.mutedUsers = [];
+  bucket.mutedUserDeletedIds = [`muteduser|${timestamp}`];
+  const deletedMutedUserSave = await save();
+  assert.equal(deletedMutedUserSave.ok, true);
+  assert.equal(storage[dailyKey].mutedUsers[0].username, "MutedUser");
+  assert.deepEqual(storage[dailyKey].mutedUserDeletedIds, [`muteduser|${timestamp}`]);
+
+  const remutedTimestamp = timestamp + 1000;
+  state.mutedUsersDetails = [{
+    username: "MutedUser",
+    mutedBy: "Moderator",
+    lastMessage: "new message",
+    timestamp: remutedTimestamp,
+  }];
+  bucket.mutedUsers = state.mutedUsersDetails.map((user) => ({ ...user }));
+  const remutedSave = await save();
+  assert.equal(remutedSave.ok, true);
+  assert.equal(storage[dailyKey].mutedUsers[0].timestamp, remutedTimestamp);
+
   bucket.moderationStats = { attempts: 1, successes: 1, failures: 0, pending: 0 };
   bucket.moderationPendingById = {};
+  bucket.moderationLogs[0].status = "SUCESSO";
   const resolvedSave = await save();
   assert.equal(resolvedSave.ok, true);
   assert.equal(storage[dailyKey].moderationStats.pending, 0);
   assert.deepEqual(storage[dailyKey].moderationPendingById, {});
+  assert.equal(storage[dailyKey].moderationLogs[0].status, "SUCESSO");
+
+  bucket.moderationLogDeletedIds = ["moderation-1"];
+  bucket.moderationLogs = [];
+  const deletedDetailSave = await save();
+  assert.equal(deletedDetailSave.ok, true);
+  assert.deepEqual(storage[dailyKey].moderationLogs, []);
+  assert.deepEqual(storage[dailyKey].moderationStats, {
+    attempts: 1,
+    successes: 1,
+    failures: 0,
+    pending: 0,
+  });
 });
 
 test("refreshes report models only after a new history entry is saved", async () => {

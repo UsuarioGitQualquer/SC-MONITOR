@@ -8,6 +8,7 @@ import {
   getDailyStorageKey,
   localDateKey,
   state,
+  trimCapturedEvents,
 } from "./state.js";
 import { requestUIRefresh, UI_REFRESH } from "./ui-refresh.js";
 
@@ -85,9 +86,15 @@ function mergeDailyRecords(sources, keyForRecord, timestampForRecord) {
 
 function compactMutedUser(user) {
   const timestamp = Number(user?.timestamp ?? user?._timestamp) || 0;
+  const recentMessages = Array.isArray(user?.recentMessages)
+    ? user.recentMessages.map((message) => String(message || "").trim()).filter(Boolean).slice(0, 2)
+    : [];
+  const lastMessage = String(user?.lastMessage || recentMessages[0] || "").trim();
   return {
     username: String(user?.username || "").trim(),
     mutedBy: String(user?.mutedBy || ""),
+    lastMessage,
+    recentMessages,
     timestamp,
     _timestamp: timestamp,
   };
@@ -144,6 +151,7 @@ export function saveToGlobalHistory(onComplete, targetDayKey = null) {
   try {
     snapshot = JSON.parse(JSON.stringify(state));
     delete snapshot.currentTicketPrice;
+    delete snapshot.currentTicketShowActive;
     const snapshotBucket = snapshot.dailyBuckets?.[dayKey];
     if (snapshotBucket && Array.isArray(snapshot.capturedEvents)) {
       if (!Array.isArray(snapshotBucket.capturedEvents) || snapshotBucket.capturedEvents.length === 0) {
@@ -478,6 +486,15 @@ export function saveDailyStats(
           (user) => String(user.username || "").trim().toLocaleLowerCase(),
           (user) => Number(user.timestamp ?? user._timestamp) || 0,
         );
+        const deletedMutedUserIds = new Set([
+          ...(Array.isArray(daily.mutedUserDeletedIds)
+            ? daily.mutedUserDeletedIds
+            : []),
+          ...(Array.isArray(existingBucket.mutedUserDeletedIds)
+            ? existingBucket.mutedUserDeletedIds
+            : []),
+        ].map((id) => String(id)));
+        daily.mutedUserDeletedIds = Array.from(deletedMutedUserIds);
         const moderationStats = daily.moderationStats || {};
         const bucketModerationStats = existingBucket.moderationStats || {};
         daily.moderationStats = {
@@ -502,6 +519,56 @@ export function saveDailyStats(
         };
         daily.moderationPendingById =
           existingBucket.moderationPendingById || daily.moderationPendingById || {};
+        const moderationDeletedIds = new Set([
+          ...(Array.isArray(daily.moderationLogDeletedIds)
+            ? daily.moderationLogDeletedIds
+            : []),
+          ...(Array.isArray(existingBucket.moderationLogDeletedIds)
+            ? existingBucket.moderationLogDeletedIds
+            : []),
+        ].map((id) => String(id)));
+        daily.moderationLogDeletedIds = Array.from(moderationDeletedIds);
+        const sourceModerationLogs = (Array.isArray(source.moderationLogs)
+          ? source.moderationLogs
+          : []).filter((log) => {
+          const timestamp = Number(log?.timestamp) || 0;
+          return timestamp > 0 && localDateKey(timestamp) === todayDate;
+        });
+        daily.moderationLogs = mergeDailyRecords(
+          [
+            daily.moderationLogs,
+            existingBucket.moderationLogs,
+            sourceModerationLogs,
+          ],
+          (log) => String(log.id || ""),
+          (log) => Number(log.updatedAt) || Number(log.timestamp) || 0,
+        ).filter((log) => !moderationDeletedIds.has(String(log.id || "")));
+        const moderationHourlyTotals = {
+          ...(daily.moderationHourlyTotals || {}),
+          ...(existingBucket.moderationHourlyTotals || {}),
+        };
+        Object.entries(existingBucket.moderationHourlyTotals || {}).forEach(([hour, count]) => {
+          moderationHourlyTotals[hour] = Math.max(
+            Number(moderationHourlyTotals[hour]) || 0,
+            Number(count) || 0,
+          );
+        });
+        if (
+          Object.keys(moderationHourlyTotals).length === 0 &&
+          daily.moderationLogs.length > 0
+        ) {
+          daily.moderationLogs.forEach((log) => {
+            const timestamp = Number(log.timestamp) || 0;
+            if (!timestamp) return;
+            const hour = Number(new Intl.DateTimeFormat("en-GB", {
+              timeZone: "America/Sao_Paulo",
+              hour: "2-digit",
+              hourCycle: "h23",
+            }).format(new Date(timestamp)));
+            moderationHourlyTotals[hour] = (Number(moderationHourlyTotals[hour]) || 0) + 1;
+          });
+        }
+        daily.moderationHourlyTotals = moderationHourlyTotals;
 
         daily.peakViewersDay = Math.max(
           daily.peakViewersDay || 0,
@@ -676,7 +743,7 @@ export function saveDailyStats(
           const key = event.id || `${eventTimestamp}-${event.item}-${event.price}`;
           if (!mergedCapturedEvents.has(key)) mergedCapturedEvents.set(key, event);
         });
-        daily.capturedEvents = Array.from(mergedCapturedEvents.values()).slice(-500);
+        daily.capturedEvents = trimCapturedEvents(Array.from(mergedCapturedEvents.values()));
         const largestTipCandidates = [
           daily.largestTip,
           existingBucket.largestTip,

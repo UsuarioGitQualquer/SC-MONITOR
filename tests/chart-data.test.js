@@ -102,3 +102,24 @@ test("weights interval audience averages by samples and ignores unsampled minute
 
   assert.equal(preciseBars[0].avgViewers, 0);
 });
+
+test("weights interval averages for users with tokens by their recorded samples", () => {
+  const bars = buildTimeBucketBars([
+    { minute: "10:00", tokensUsersSum: 6, tokensUsersSamples: 2, tokensUsersPeak: 4 },
+    { minute: "10:01", tokensUsersSum: 9, tokensUsersSamples: 1, tokensUsersPeak: 9 },
+    { minute: "10:20", tokensUsersSum: 5, tokensUsersSamples: 1, tokensUsersPeak: 5 },
+  ], 20);
+
+  assert.deepEqual(
+    bars.map(({ label, avgTokensUsers, tokensUsersSamples, tokensUsersPeak }) => ({
+      label,
+      avgTokensUsers,
+      tokensUsersSamples,
+      tokensUsersPeak,
+    })),
+    [
+      { label: "10:00", avgTokensUsers: 5, tokensUsersSamples: 3, tokensUsersPeak: 9 },
+      { label: "10:20", avgTokensUsers: 5, tokensUsersSamples: 1, tokensUsersPeak: 5 },
+    ],
+  );
+});

@@ -1,4 +1,4 @@
-SC MONITOR - VERSÃO 5.0
+SC MONITOR - VERSÃO 5.0.3
 ========================================================================
 
        Painel Local de Audiência, Chat, Gorjetas, Metas e Moderação
@@ -8,9 +8,12 @@ SC MONITOR - VERSÃO 5.0
 
 O SC Monitor é uma extensão para navegadores Chromium que monitora, em tempo
 real, a atividade das salas do Stripchat. Os dados são processados e guardados
-localmente no navegador. A versão 5.0 consolida a estabilidade dos dados em
-transmissões de longa duração e amplia a análise com mapas de calor, eficiência
-de audiência, engajamento por liga e linha do tempo de metas e shows.
+localmente no navegador. A versão 5.0.3 melhora a detecção do status offline e da
+atividade no chat, para encerrar lives offline após dois minutos sem novas
+mensagens reais, sem que avisos automáticos ou alterações em mensagens antigas
+reiniciem a espera. Ela mantém as melhorias da versão 5.0: estabilidade dos dados
+em transmissões de longa duração e análise com mapas de calor, eficiência de
+audiência, engajamento por liga e linha do tempo de metas e shows.
 
 
 ------------------------------------------------------------------------
@@ -42,7 +45,7 @@ COMPARAÇÃO POR DIA DA SEMANA E TRANSPARÊNCIA DAS MÉTRICAS
 
    - Acumulador inteligente (Merge) que mantém o histórico de metas da
 
-     sessão mesmo quando saem da área visível do chat ou entram em modo
+     live mesmo quando saem da área visível do chat ou entram em modo
 
      ticket/offline.
 
@@ -90,9 +93,9 @@ COMPARAÇÃO POR DIA DA SEMANA E TRANSPARÊNCIA DAS MÉTRICAS
      genéricos de nick e saídas/retornos sincronizados em shows restritos.
 
 
-5. PAINÉIS ANALÍTICOS (SESSÃO ATIVA & CONSOLIDADO DIÁRIO)
+5. PAINÉIS ANALÍTICOS (LIVE ATIVA & CONSOLIDADO DIÁRIO)
 
-   - 📊 Painel Analítico (Sessão Ativa): visão em tempo real com picos e
+   - 📊 Painel Analítico (Live Ativa): visão em tempo real com picos e
      médias de espectadores, atividade efetiva, tokens e retenção.
 
    - Retenção Hoje apresenta a quantidade de usuários novos e recorrentes,
@@ -100,7 +103,7 @@ COMPARAÇÃO POR DIA DA SEMANA E TRANSPARÊNCIA DAS MÉTRICAS
      conhecida são classificados como recorrentes, sem presumir que sejam novos.
 
    - Atividade efetiva é o tempo líquido em transmissão ao vivo dividido pelo
-     tempo bruto monitorado; Ritmo estima tokens por hora líquida da sessão.
+     tempo bruto monitorado; Ritmo estima tokens por hora líquida da live.
 
    - 📅 Consolidado Diário (Hoje): integra todas as lives do dia, incluindo
      tokens, maior pico de espectadores e estatísticas de usuários e ligas.
@@ -110,7 +113,7 @@ COMPARAÇÃO POR DIA DA SEMANA E TRANSPARÊNCIA DAS MÉTRICAS
      no bloco atual; o tooltip identifica esses tokens sem horário registrado.
      Nos relatórios do dia, tokens sem horário são informados à parte e não
      distribuídos artificialmente pelos intervalos.
-     O painel da sessão mostra o fluxo médio de pessoas listadas em blocos de
+     O painel da live mostra o fluxo médio de pessoas listadas em blocos de
      2 minutos, atualizado a cada 2 minutos.
 
    - A aba Usuários mostra áreas independentes por liga e a linha do total de
@@ -118,12 +121,12 @@ COMPARAÇÃO POR DIA DA SEMANA E TRANSPARÊNCIA DAS MÉTRICAS
      continua indicado no cabeçalho; espectadores sem nick visível não entram
      na contagem de listados.
 
-6. EVENTOS E RESUMOS POR SESSÃO OU DIA
+6. EVENTOS E RESUMOS POR LIVE OU DIA
 
    - A tabela de eventos e os blocos de resumo da aba Eventos podem alternar
-     entre os dados da sessão atual e os dados acumulados no dia.
+     entre os dados da live atual e os dados acumulados no dia.
 
-   - O seletor Sessão/Dia atualiza em conjunto a lista de eventos, o resumo
+   - O seletor Live/Dia atualiza em conjunto a lista de eventos, o resumo
      consolidado por item, o gráfico de ganhos por tipo e o ranking de usuários.
 
    - Filtros Todos, Gorjetas, Menu e Metas/Shows continuam disponíveis. O
@@ -146,13 +149,27 @@ COMPARAÇÃO POR DIA DA SEMANA E TRANSPARÊNCIA DAS MÉTRICAS
 
      com registro do autor, moderador e última mensagem capturada.
 
+   - A aba Moderação mostra as mensagens moderadas do dia atual. O Relatório
+     mantém o histórico dos outros dias, incluindo as mensagens dos usuários
+     silenciados. No relatório por período, é possível remover os detalhes de
+     um usuário silenciado somente no período selecionado, sem alterar os
+     totais agregados.
+
 
 8. CONTROLE DE TEMPO & INTERFACE FLUTUANTE
 
    - Cronômetros independentes para Tempo Bruto e Tempo Líquido ativo.
 
-   - No modo Monitorar Sala, uma indicação de sala offline aguarda 2 minutos
-     e é prolongada por novas mensagens antes de encerrar o monitoramento.
+   - No modo Monitorar Sala, a coleta começa quando o SC Monitor detecta a
+     transmissão ao vivo ou o estado “Em espera”. Durante a espera, conta o
+     Tempo Bruto, mas não o Tempo Líquido. Ao detectar que a modelo ficou
+     offline, o Tempo Bruto pausa imediatamente, embora a coleta continue
+     durante a janela de tolerância usada para decidir se a mesma live retornou:
+     2 minutos desde a detecção local e também desde a última mensagem real,
+     prevalecendo o prazo posterior. O contador não usa o horário relativo do site.
+     Cada nova mensagem real reinicia o prazo de inatividade; avisos automáticos
+     e alterações em mensagens antigas não. Se o prazo terminar, a live é
+     encerrada; se a modelo voltar depois, uma nova live começa.
 
    - Painel arrastável pelo cabeçalho ou pela barra inferior interna, que
      mostra a data e a logo. O tamanho pode ser ajustado pelos quatro cantos;
@@ -168,10 +185,31 @@ COMPARAÇÃO POR DIA DA SEMANA E TRANSPARÊNCIA DAS MÉTRICAS
    - Exportação completa do relatório de usuários, visitas, tempo e tokens
      em formato CSV.
 
-   - Relatórios detalhados em uma página da extensão, aberta pelo popup ou pelo painel.
-     Os relatórios por período também mostram a evolução diária de usuários novos e
-     recorrentes quando esses dados foram salvos. O rei atual de cada dia também é
-     registrado e exibido no relatório diário e no resumo por período.
+   - A Página de Relatórios é a página dedicada da extensão. Abra-a pelo popup
+     ou pelo botão “↗ Página de relatório” na aba Relatório do painel. Nela,
+     você consulta os
+     relatórios detalhados, filtra modelo e datas, exporta CSV e acessa as
+     ferramentas para importar/exportar backups e apagar dados. Os relatórios
+     por período também mostram a evolução diária de usuários novos e
+     recorrentes quando esses dados foram salvos. O rei atual de cada dia
+     também é registrado e exibido no relatório diário e no resumo por período.
+     O relatório diário também conta os shows por tipo e estima os ganhos em
+     tokens e informa o horário de início e fim de cada show. Para cada Ticket
+     show, detalha ingressos vendidos, preço por ingresso e ganho estimado
+     quando esses dados foram capturados. Também
+     permite abrir a lista de participantes de cada Ticket show ou Show em
+     Grupo. No relatório por período, os shows ficam em pastas recolhíveis por
+     tipo e, dentro delas, por data; listas de participantes registradas
+     continuam disponíveis para consulta. A depender do momento em que a
+     extensão é iniciada, alguns anúncios, compras ou gorjetas podem não ser
+     capturados, então os valores apresentados podem variar.
+     Cada usuário aparece uma vez, com a quantidade de vezes que entrou.
+     Nos relatórios de Dia e Live, também é possível registrar manualmente
+     ganhos de chat privado, Show Privado e Show Exclusivo, com valor e nick
+     opcional. Para shows privados e exclusivos, escolha um show existente ou
+     crie um novo; os valores entram nos totais do dia, da live e do período.
+     Cada ganho registrado pode ser apagado individualmente; valores ainda não
+     enviados são preservados quando o relatório é atualizado.
    - Os gráficos usam intervalos automáticos conforme a duração registrada:
      até 9 min: 1 min; 10–29 min: 2 min; 30–59 min: 5 min; 1h–1h39: 10 min;
      1h40–2h59: 20 min; 3h–4h59: 30 min; a partir de 5h: 1 hora.
@@ -181,14 +219,17 @@ COMPARAÇÃO POR DIA DA SEMANA E TRANSPARÊNCIA DAS MÉTRICAS
 
    COMO LER OS GRÁFICOS DOS RELATÓRIOS
 
-   - A página oferece três visões: Dia, Sessão e Período. Escolha o modelo/sala e
-     os dados disponíveis; no relatório por período, defina as datas e separe os
-     resultados por dia, semana ou mês. Também é possível comparar dois períodos.
+   - Na Página de Relatórios, há três visões: Dia, Live e Período. Escolha o
+     modelo/sala e os dados disponíveis; no relatório por período, defina as datas
+     e separe os resultados por dia, semana ou mês. Também é possível comparar
+     dois períodos. As seleções dos filtros são mantidas ao recarregar a página.
 
-   - Nos relatórios de Dia e Sessão, o gráfico combinado mostra tokens por intervalo
-     junto da evolução do público. No relatório diário, marcadores indicam shows
-     registrados. Os gráficos de fluxo detalham tokens e pessoas listadas; escolha
-     o tamanho dos blocos ou use Automático, que ajusta o intervalo à duração.
+   - Nos relatórios de Dia e Live, o gráfico combinado mostra tokens por intervalo
+     junto da evolução do público e marca os tipos de show registrados. A seção
+     Shows resume quantidades e ganhos; nos relatórios diário, de Live e por
+     período, também permite consultar os participantes registrados em cada
+     Ticket show e Show em Grupo. Os gráficos de fluxo detalham tokens e pessoas listadas; escolha o
+     tamanho dos blocos ou use Automático, que ajusta o intervalo à duração.
      Tokens sem horário registrado são informados à parte e não são distribuídos
      artificialmente nos blocos.
 
@@ -197,11 +238,12 @@ COMPARAÇÃO POR DIA DA SEMANA E TRANSPARÊNCIA DAS MÉTRICAS
      tokens por categoria. Os gráficos de desempenho comparam duração e tokens
      entre as lives do dia; os rankings mostram maiores gorjetas, opções de menu e
      resultados de roleta registrados. Tabelas complementares apresentam lives,
-     doadores, suspeitas e usuários silenciados quando há dados.
+     doadores, suspeitas e usuários silenciados quando há dados. O resumo diário
+     também conta os shows iniciados por tipo: ticket, privado, exclusivo e em grupo.
 
-   - No relatório por Sessão, o gráfico combinado mostra público e ganhos da live
+   - No relatório por Live, o gráfico combinado mostra público e ganhos da live
      nos intervalos selecionados. Também há fluxo de tokens e usuários listados,
-     ganhos por categoria e, quando outra sessão é selecionada para comparação,
+     ganhos por categoria e, quando outra live é selecionada para comparação,
      uma tabela com as principais diferenças.
 
    - No relatório por Período, “Ganhos por data/semana/mês” soma os tokens em cada
@@ -276,7 +318,7 @@ COMPARAÇÃO POR DIA DA SEMANA E TRANSPARÊNCIA DAS MÉTRICAS
 
 ABAS
 
-   - 📊 Geral: mostra a sala e o estado do monitoramento, tokens da sessão e
+   - 📊 Geral: mostra a sala e o estado do monitoramento, tokens da live e
      do dia, tempos bruto e líquido, espectadores e configurações de tarifas
      do Fan Club e dos shows. Os valores de shows são estimativas.
 
@@ -292,17 +334,19 @@ ABAS
      clique em uma tarefa para marcá-la como concluída.
 
    - 🛡️ Moderação: permite cadastrar palavras e frases proibidas e consulta
-     mensagens moderadas e usuários silenciados. A extensão pode tentar silenciar
-     mensagens identificadas; confira o histórico para ver o resultado.
+     mensagens moderadas do dia atual e usuários silenciados. Os relatórios por
+     período preservam o histórico e as mensagens associadas. É possível
+     remover um detalhe sem alterar os totais agregados.
 
    - 🗂️ Histórico: lista salas/modelos e dados diários salvos, com ações sobre
      os registros. Também permite exportar/importar backups completos ou de uma
      modelo. Pause o monitoramento de todas as abas abertas antes de restaurar.
 
-   - 📑 Relatório: compara dados da sessão, do dia ou de um período. Selecione a
-     sala e as datas para consultar os gráficos e métricas; use “Página” para
-     abrir os relatórios detalhados. “Copiar Resumo” e “CSV” exportam os dados
-     do relatório selecionado.
+   - 📑 Relatório: compara dados da live, do dia ou de um período. Selecione a
+     sala e as datas para consultar gráficos e métricas; o botão
+     “↗ Página de relatório” abre a Página de Relatórios com os relatórios
+     detalhados. “Copiar Resumo” e “CSV”
+     exportam os dados do relatório selecionado.
 
 
 CONTROLES DO PAINEL
@@ -311,7 +355,7 @@ CONTROLES DO PAINEL
      painel ou na página de relatórios. A preferência é aplicada às interfaces abertas.
 
    - Monitorar / Pausar Monitor: inicia ou encerra manualmente a coleta da
-     sessão atual. Pausar encerra e salva a sessão; não apaga o histórico diário.
+     live atual. Pausar encerra e salva a live; não apaga o histórico diário.
 
    - Coleta Automática: enquanto o monitoramento está ativo, alterna entre as
      abas de chat e usuários aproximadamente a cada 12 segundos para atualizar
@@ -319,11 +363,20 @@ CONTROLES DO PAINEL
      monitoramento por conta própria.
 
    - Monitorar sala (OFF ⇄ ON): acompanha automaticamente a sala aberta. Inicia
-     a coleta quando detecta a transmissão ao vivo e encerra após 2 minutos
-     offline sem novas mensagens no chat. Mensagens prolongam a espera; voltar
-     ao vivo cancela a parada. Ao navegar para outra sala, a coleta da sala
-     acompanhada é encerrada. Desmarcar esta opção desativa a automação, mas não
-     pausa uma sessão que já esteja monitorando; use “Pausar Monitor”.
+     a coleta quando detecta a transmissão ao vivo ou o estado “Em espera”.
+     Enquanto a sala está em espera, conta o Tempo Bruto, mas não o Tempo
+     Líquido. Quando a modelo fica offline, o Tempo Bruto pausa assim que o SC
+     Monitor detecta a mudança; as coletas continuam durante a janela de
+     tolerância para decidir se é a mesma live: 2 minutos desde a detecção local
+     e também desde a última mensagem real, prevalecendo o prazo posterior. Essa
+     contagem não usa o tempo relativo exibido pelo site. Cada nova mensagem real
+     reinicia o prazo de inatividade, mas avisos automáticos e alterações em
+     mensagens antigas não. Se a modelo voltar antes do encerramento, a mesma
+     live continua; se voltar depois, começa outra. Atualizar a página ou sair e
+     voltar à sala continua iniciando uma nova live, como já acontece hoje.
+     Ao navegar para outra sala, a coleta da sala acompanhada é encerrada.
+     Desmarcar esta opção desativa a automação, mas não pausa um monitoramento
+     que já esteja em andamento; use “Pausar Monitor”.
 
    - Fixar: mantém o painel aberto ao clicar fora dele. Para fechá-lo, use
      “Fechar”.
@@ -333,7 +386,7 @@ CONTROLES DO PAINEL
 
    - Atualizar: solicita uma nova leitura dos dados disponíveis na página.
      Guardar salva os dados locais naquele momento. CSV exporta os dados em
-     formato de planilha; “Limpar sessão” reinicia os dados da sessão atual.
+     formato de planilha; “Limpar live” reinicia os dados da live atual.
 
 
 ------------------------------------------------------------------------
@@ -353,7 +406,7 @@ site_monitor/
 │   ├── popup.css             # Estilos do popup
 │   └── popup.js              # Lógica de conexão do popup com a aba ativa
 ├── src/
-│   ├── content.js            # Orquestração do monitoramento, sessão e navegação SPA
+│   ├── content.js            # Orquestração do monitoramento, live e navegação SPA
 │   ├── background.js         # Service worker, IndexedDB, backups e ícone por aba
 │   ├── core/
 │   │   ├── state.js          # Estado global em memória e métricas
@@ -467,6 +520,8 @@ Habilitar uso em Janelas Anônimas (Opcional):
 - Role a página para baixo e localize a opção **"Permitir em modo anônimo"**.
 - Ative a chave correspondente para permitir o uso da extensão em páginas do
   Stripchat abertas em uma janela anônima.
+- Os relatórios abrem em uma janela normal para usar os dados compartilhados
+  com o restante da extensão.
 
 
 ------------------------------------------------------------------------

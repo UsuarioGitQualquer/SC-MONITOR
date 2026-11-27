@@ -65,7 +65,7 @@ export function buildDailyReportCsv(report, formatSecondsToTime) {
     [
       "Modelo",
       "Data",
-      "Tokens (gorjetas + shows estimados)",
+      "Tokens (ganhos registrados)",
       "Tempo Bruto",
       "Tempo Liquido",
       "Pico Espectadores",
@@ -242,7 +242,7 @@ export function buildPeriodReportCsv(
     ["Maior gorjeta", summary.bestTip?.username || "", Math.round(Number(summary.bestTip?.tokens) || 0), summary.bestTip?.type || "", summary.bestTip?.dateBr || ""],
     ["Moderacao", "Tentativas", "Confirmadas", "Falhas", "Pendentes"],
     ["", Number(summary.moderationLogCount) || 0, Number(summary.moderationSuccessCount) || 0, Number(summary.moderationFailureCount) || 0, Number(summary.moderationPendingCount) || 0],
-    ["Data", "Dia da semana", "Tokens (gorjetas + shows estimados)", "Pico Viewers"],
+    ["Data", "Dia da semana", "Tokens (ganhos registrados)", "Pico Viewers"],
     ...summary.dayBars.map((day) => [
       day.dateBr,
       weekdayNames[weekdayIndexFromDateKey(day.dateKey)] || "",

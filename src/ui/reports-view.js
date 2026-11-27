@@ -1,5 +1,6 @@
 import { clean } from "../utils/helpers.js";
 import {
+  buildAudienceLeagueChart,
   buildInteractiveBarsSvg,
   buildNeonDonutGauge,
   buildNeonWaveAreaChart,
@@ -12,6 +13,8 @@ import {
 } from "./report-charts.js";
 import { buildTimeBucketBars } from "./chart-data.js";
 import {
+  buildDailyShowCounts,
+  buildDailyShowStats,
   buildGainTypeRows,
   getRoomKingSourceLabel,
   hasAudienceConversionStats,
@@ -53,6 +56,33 @@ function escapeAttribute(value) {
     .replace(/>/g, "&gt;");
 }
 
+function getManualEntryEvents(events) {
+  const asArray = (value) => Array.isArray(value)
+    ? value
+    : value && typeof value === "object"
+      ? Object.values(value)
+      : [];
+  const entries = events && typeof events === "object" &&
+    ("capturedEvents" in events || "manualEarnings" in events)
+    ? [...asArray(events.capturedEvents), ...asArray(events.manualEarnings)]
+    : asArray(events);
+  const seen = new Set();
+  return entries.filter((event, index) => {
+    if (event?.manualEntry !== true) return false;
+    const id = String(event.id || `manual-${index}`);
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+}
+
+function getManualEntryTotal(events) {
+  return getManualEntryEvents(events).reduce(
+    (total, event) => total + Math.max(0, Number(event.manualAmount) || 0),
+    0,
+  );
+}
+
 function buildReportChartGroup(title, description, category, charts = []) {
   const chartMarkup = charts.filter((chart) => typeof chart === "string" && chart.trim()).join("");
   const icon = CHART_GROUP_ICONS[category];
@@ -73,7 +103,13 @@ function buildReportChartGroup(title, description, category, charts = []) {
   `;
 }
 
-function buildReportFlowCharts(timeBars, timeStepMin, subtitle) {
+function buildReportFlowCharts(
+  timeBars,
+  timeStepMin,
+  subtitle,
+  audiencePoints = [],
+  peakViewers = 0,
+) {
   const intervalLabel = timeStepMin === 60 ? "1h" : `${timeStepMin} min`;
   const bars = Array.isArray(timeBars) ? timeBars : [];
   const tokenPoints = bars.map((bar) => ({
@@ -91,7 +127,7 @@ function buildReportFlowCharts(timeBars, timeStepMin, subtitle) {
 
   return buildReportChartGroup(
     "Fluxos ao longo do tempo",
-    "Acompanhe os ganhos e a média de pessoas listadas em cada bloco.",
+    "Acompanhe os ganhos, as pessoas listadas e os usuários com tokens em cada bloco.",
     "lives",
     [
       buildNeonWaveAreaChart({
@@ -106,7 +142,27 @@ function buildReportFlowCharts(timeBars, timeStepMin, subtitle) {
         strokeColor: "#00e5ff",
         fillStart: "#00e5ff",
         fillEnd: "#2563eb",
+        footerNote: "Usuários listados são aqueles cujo nome aparece na lista de usuários da sala.",
       }),
+      buildNeonWaveAreaChart({
+        title: "🪙 Fluxo de Usuários com Tokens",
+        subtitle: `Média em blocos de ${intervalLabel}`,
+        points: bars
+          .filter((bar) => Number(bar.tokensUsersSamples) > 0)
+          .map((bar) => ({
+            label: bar.label,
+            value: bar.avgTokensUsers,
+            tooltip: `${bar.label}: ${bar.avgTokensUsers} usuários com tokens (média)`,
+          })),
+        strokeColor: "#fbbf24",
+        fillStart: "#fbbf24",
+        fillEnd: "#f97316",
+      }),
+      buildAudienceLeagueChart(
+        audiencePoints,
+        peakViewers,
+        `Média por bloco de ${intervalLabel}`,
+      ),
     ],
   );
 }
@@ -149,6 +205,481 @@ function buildSummaryStrip(cards = []) {
       `).join("")}
     </div>
   `;
+}
+
+function formatShowTokens(value) {
+  return String(Math.max(0, Math.round(Number(value) || 0)));
+}
+
+function buildTicketShowPriceLabel(ticketShow = {}) {
+  if (Number(ticketShow.unpricedTicketsSold) > 0) return "Não registrado";
+  const prices = Array.isArray(ticketShow.ticketPriceBreakdown)
+    ? ticketShow.ticketPriceBreakdown
+    : [];
+  if (prices.length) {
+    return prices
+      .map((entry) => `${formatShowTokens(entry.quantity)} × ${formatShowTokens(entry.price)} tk`)
+      .join(", ");
+  }
+  const ticketPrice = Number(ticketShow.ticketPrice) || 0;
+  return ticketPrice > 0 ? `${formatShowTokens(ticketPrice)} tk` : "Não registrado";
+}
+
+function formatTicketShowEarnings(ticketStats = {}) {
+  return Number(ticketStats.unpricedTicketsSold) > 0
+    ? "Não registrado"
+    : `${formatShowTokens(ticketStats.earnings)} tk`;
+}
+
+function formatShowDate(dateKey) {
+  const key = String(dateKey || "");
+  return /^\d{4}-\d{2}-\d{2}$/.test(key)
+    ? `${key.slice(8, 10)}/${key.slice(5, 7)}/${key.slice(0, 4)}`
+    : "";
+}
+
+function formatShowTime(timestamp) {
+  const value = Number(timestamp);
+  return Number.isFinite(value) && value > 0
+    ? new Date(value).toLocaleTimeString("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      hour: "2-digit",
+      minute: "2-digit",
+    })
+    : "Não registrado";
+}
+
+function buildShowEventMarkers(capturedEvents = []) {
+  const events = Array.isArray(capturedEvents)
+    ? capturedEvents
+    : capturedEvents && typeof capturedEvents === "object"
+      ? Object.values(capturedEvents)
+      : [];
+  const markers = events.reduce((markers, event) => {
+    if (event?.manualEntry === true) return markers;
+    const combined = `${String(event?.type || "")} ${String(event?.item || "")}`
+      .toLocaleLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+    if (/menu de gorjetas|menu|gorjeta avulsa|roleta|battleship|objetivo epico|compra de conteudo/.test(combined)) {
+      return markers;
+    }
+    const showType = /show em grupo/.test(combined)
+      ? "group"
+      : /show privado/.test(combined)
+        ? "private"
+        : /show exclusivo/.test(combined)
+          ? "exclusive"
+          : /ticket show|show (?:por|de) (?:tickets?|ingressos?|bilhetes?|entradas?)/.test(combined)
+            ? "ticket"
+            : "";
+    if (!showType) return markers;
+    const showBoundary = event?.showBoundary === "end" || /\bfim\b/.test(combined)
+      ? "end"
+      : event?.showBoundary === "start" || /\binicio\b/.test(combined)
+        ? "start"
+        : "";
+    if (!showBoundary && /\b1 min\b/.test(combined)) return markers;
+    const timestamp = Number(event?.timestamp ?? event?.time) || 0;
+    if (timestamp <= 0) return markers;
+    const label = new Date(timestamp).toLocaleTimeString("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    markers.push({
+      label,
+      timestamp,
+      showType,
+      showBoundary,
+      type: showBoundary === "end"
+        ? "Fim do show"
+        : showBoundary === "start"
+          ? "Início do show"
+          : "Show",
+      tooltip: showType === "ticket"
+        ? `${showBoundary === "end" ? "Fim" : "Início"} do Ticket show`
+        : showBoundary === "end"
+          ? `Fim do show: ${String(event?.item || event?.type || "Show").trim()}`
+          : showBoundary === "start"
+            ? `Início do show: ${String(event?.item || event?.type || "Show").trim()}`
+            : `Show: ${String(event?.item || event?.type || "Show").trim()}`,
+    });
+    return markers;
+  }, []);
+  const ticketBoundaries = markers
+    .filter((marker) => marker.showType === "ticket" && marker.showBoundary)
+    .sort((left, right) => left.timestamp - right.timestamp);
+  if (ticketBoundaries[0]?.showBoundary === "end") {
+    const firstEnd = ticketBoundaries[0];
+    const hasEarlierTicketStart = ticketBoundaries.some((marker) =>
+      marker.showBoundary === "start" && marker.timestamp < firstEnd.timestamp
+    );
+    if (!hasEarlierTicketStart) {
+      const firstSale = events
+        .filter((event) => {
+          const combined = `${String(event?.type || "")} ${String(event?.item || "")}`
+            .toLocaleLowerCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "");
+          const timestamp = Number(event?.timestamp ?? event?.time) || 0;
+          return (
+            /ingresso ticket|compra de ingresso/.test(combined) ||
+            event?.showParticipantType === "ticket"
+          ) &&
+            timestamp > 0 && timestamp < firstEnd.timestamp;
+        })
+        .reduce((first, event) => {
+          const timestamp = Number(event?.timestamp ?? event?.time) || 0;
+          return !first || timestamp < first.timestamp ? { event, timestamp } : first;
+        }, null);
+      if (firstSale) {
+        markers.push({
+          label: new Date(firstSale.timestamp).toLocaleTimeString("pt-BR", {
+            timeZone: "America/Sao_Paulo",
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          timestamp: firstSale.timestamp,
+          showType: "ticket",
+          showBoundary: "start",
+          inferredStart: true,
+          type: "Início estimado do show",
+          tooltip: "Início estimado do Ticket show (marcador de abertura não retido)",
+        });
+      }
+    }
+  }
+  return markers;
+}
+
+function buildShowParticipantsDetails(
+  participants = [],
+  participantEntries = [],
+  { compact = false } = {},
+) {
+  const names = Array.isArray(participants) ? participants : [];
+  const entries = Array.isArray(participantEntries) ? participantEntries : [];
+  if (compact && names.length === 0) return "";
+  return `
+    <details class="daily-show-participants${compact ? " daily-show-participants--compact" : ""}">
+      <summary><span>Ver participantes</span> <span>(${names.length})</span></summary>
+      ${names.length
+        ? `<ul>${names.map((name) => {
+          const entry = entries.find((participant) =>
+            String(participant?.name || "").toLocaleLowerCase() === String(name).toLocaleLowerCase()
+          );
+          const count = Math.max(1, Math.round(Number(entry?.count) || 1));
+          return `<li><span>${clean(name)}</span><span class="daily-show-participant-count"><small>Entradas no show:</small> ${count}</span></li>`;
+        }).join("")}</ul>`
+        : `<p>Nenhum participante registrado</p>`}
+    </details>
+  `;
+}
+
+function buildTicketShowRow(ticketShow, index, compact = false, grouped = false) {
+  return `
+    <article class="daily-ticket-show${compact ? " daily-ticket-show--compact" : ""}">
+      <h4>${grouped
+        ? `<span>Show #${index + 1}</span>`
+        : `<span>Ticket show</span> <span>#${index + 1}${formatShowDate(ticketShow.dateKey) ? ` · ${formatShowDate(ticketShow.dateKey)}` : ""}</span>`}</h4>
+      ${compact
+        ? `<span class="daily-ticket-show-summary"><small>Horário:</small> ${formatShowTime(ticketShow.startedAt)}–${formatShowTime(ticketShow.endedAt)} · <small>Ingressos:</small> ${formatShowTokens(ticketShow.ticketsSold)} · <small>Preço:</small> ${clean(buildTicketShowPriceLabel(ticketShow))} · <small>Ganho:</small> ${formatTicketShowEarnings(ticketShow)}</span>`
+        : `
+          <span><small>${ticketShow.inferredStart ? "Início estimado:" : "Início:"}</small> ${formatShowTime(ticketShow.startedAt)}</span>
+          <span><small>Fim:</small> ${formatShowTime(ticketShow.endedAt)}</span>
+          <span><small>Ingressos vendidos:</small> ${formatShowTokens(ticketShow.ticketsSold)}</span>
+          <span><small>Preço por ingresso:</small> ${clean(buildTicketShowPriceLabel(ticketShow))}</span>
+          <span><small>Ganho estimado:</small> ${formatTicketShowEarnings(ticketShow)}</span>
+        `}
+      ${buildShowParticipantsDetails(ticketShow.participants, ticketShow.participantEntries, { compact })}
+    </article>
+  `;
+}
+
+function buildTicketShowBreakdown(ticketShows = [], compact = false) {
+  if (!ticketShows.length) return "";
+  return `
+    <div class="daily-ticket-show-breakdown">
+      <h3>${compact ? "Ticket shows" : "Detalhamento dos Ticket shows"}</h3>
+      <div class="daily-ticket-show-grid${compact ? " daily-ticket-show-grid--compact" : ""}">
+        ${ticketShows.map((ticketShow, index) => buildTicketShowRow(ticketShow, index, compact)).join("")}
+      </div>
+    </div>
+  `;
+}
+
+function buildTimedShowRow(show, index, showName, compact = false, grouped = false) {
+  return `
+    <article class="daily-ticket-show${compact ? " daily-ticket-show--compact" : ""}">
+      <h4>${grouped
+        ? `<span>Show #${index + 1}</span>`
+        : `<span>${showName}</span> <span>#${index + 1}${formatShowDate(show.dateKey) ? ` · ${formatShowDate(show.dateKey)}` : ""}</span>`}</h4>
+      ${compact
+        ? `<span class="daily-ticket-show-summary"><small>Horário:</small> ${formatShowTime(show.startedAt)}–${formatShowTime(show.endedAt)} · <small>Ganho:</small> ${formatShowTokens(show.earnings)} tk</span>`
+        : `
+          <span><small>Início:</small> ${formatShowTime(show.startedAt)}</span>
+          <span><small>Fim:</small> ${formatShowTime(show.endedAt)}</span>
+          <span><small>Ganho estimado:</small> ${formatShowTokens(show.earnings)} tk</span>
+        `}
+      ${buildShowParticipantsDetails(show.participants, show.participantEntries, { compact })}
+    </article>
+  `;
+}
+
+function buildGroupShowBreakdown(groupShows = [], compact = false) {
+  if (!groupShows.length) return "";
+  return `
+    <div class="daily-ticket-show-breakdown daily-group-show-breakdown">
+      <h3>${compact ? "Shows em Grupo" : "Detalhamento dos Shows em Grupo"}</h3>
+      <div class="daily-ticket-show-grid${compact ? " daily-ticket-show-grid--compact" : ""}">
+        ${groupShows.map((groupShow, index) =>
+          buildTimedShowRow(groupShow, index, "Show em Grupo", compact)
+        ).join("")}
+      </div>
+    </div>
+  `;
+}
+
+function buildTimedShowBreakdown(title, showName, shows = [], compact = false) {
+  if (!shows.length) return "";
+  const compactTitle = title.replace("Detalhamento dos ", "");
+  return `
+    <div class="daily-ticket-show-breakdown">
+      <h3>${compact ? compactTitle : title}</h3>
+      <div class="daily-ticket-show-grid${compact ? " daily-ticket-show-grid--compact" : ""}">
+        ${shows.map((show, index) => buildTimedShowRow(show, index, showName, compact)).join("")}
+      </div>
+    </div>
+  `;
+}
+
+function buildShowDateFolders(shows, renderShow) {
+  const groupedByDate = new Map();
+  shows.forEach((show, index) => {
+    const dateKey = /^\d{4}-\d{2}-\d{2}$/.test(String(show.dateKey || ""))
+      ? String(show.dateKey)
+      : "";
+    if (!groupedByDate.has(dateKey)) groupedByDate.set(dateKey, []);
+    groupedByDate.get(dateKey).push({ show, index });
+  });
+
+  return [...groupedByDate.entries()]
+    .sort(([dateA], [dateB]) => {
+      if (!dateA) return 1;
+      if (!dateB) return -1;
+      return dateB.localeCompare(dateA);
+    })
+    .map(([dateKey, entries]) => `
+      <details class="period-show-date-folder">
+        <summary>
+          <span>${dateKey ? formatShowDate(dateKey) : "Data não registrada"}</span>
+          <small>${entries.length} ${entries.length === 1 ? "show" : "shows"}</small>
+        </summary>
+        <div class="daily-ticket-show-grid daily-ticket-show-grid--compact">
+          ${entries
+            .sort((a, b) => (Number(a.show.startedAt) || 0) - (Number(b.show.startedAt) || 0))
+            .map(({ show, index }) => renderShow(show, index, true, true))
+            .join("")}
+        </div>
+      </details>
+    `)
+    .join("");
+}
+
+function buildPeriodShowTypeFolder(title, shows, count, earnings, renderShow) {
+  if (!shows.length) return "";
+  return `
+    <details class="period-show-folder">
+      <summary>
+        <span>${title}</span>
+        <small>${count} ${count === 1 ? "show" : "shows"}</small>
+        <strong>${earnings}</strong>
+      </summary>
+      <div class="period-show-folder-content">
+        ${buildShowDateFolders(shows, renderShow)}
+      </div>
+    </details>
+  `;
+}
+
+function buildPeriodShowFolders(showCounts = {}, showStats = {}) {
+  const ticketShows = showStats.ticket?.ticketShows || [];
+  const privateShows = showStats.private?.privateShows || [];
+  const exclusiveShows = showStats.exclusive?.exclusiveShows || [];
+  const groupShows = showStats.group?.groupShows || [];
+  return `
+    <div class="period-show-folders">
+      ${buildPeriodShowTypeFolder(
+        "Ticket shows",
+        ticketShows,
+        Math.max(0, Math.round(Number(showCounts.ticket) || 0)),
+        formatTicketShowEarnings(showStats.ticket),
+        (show, index, compact, grouped) => buildTicketShowRow(show, index, compact, grouped),
+      )}
+      ${buildPeriodShowTypeFolder(
+        "Shows Privados",
+        privateShows,
+        Math.max(0, Math.round(Number(showCounts.private) || 0)),
+        `${formatShowTokens(showStats.private?.earnings)} tk`,
+        (show, index, compact, grouped) => buildTimedShowRow(show, index, "Show Privado", compact, grouped),
+      )}
+      ${buildPeriodShowTypeFolder(
+        "Shows Exclusivos",
+        exclusiveShows,
+        Math.max(0, Math.round(Number(showCounts.exclusive) || 0)),
+        `${formatShowTokens(showStats.exclusive?.earnings)} tk`,
+        (show, index, compact, grouped) => buildTimedShowRow(show, index, "Show Exclusivo", compact, grouped),
+      )}
+      ${buildPeriodShowTypeFolder(
+        "Shows em Grupo",
+        groupShows,
+        Math.max(0, Math.round(Number(showCounts.group) || 0)),
+        `${formatShowTokens(showStats.group?.earnings)} tk`,
+        (show, index, compact, grouped) => buildTimedShowRow(show, index, "Show em Grupo", compact, grouped),
+      )}
+    </div>
+  `;
+}
+
+function buildDailyShowCountsCard(
+  showCounts = {},
+  showStats = {},
+  title = "Shows realizados no dia",
+  { compact = false, groupByDate = false } = {},
+) {
+  const counts = [
+    ["Ticket show", "ticket"],
+    ["Show Privado", "private"],
+    ["Show Exclusivo", "exclusive"],
+    ["Show em Grupo", "group"],
+  ];
+  return `
+    <section class="report-card report-card--show-counts${compact ? " report-card--show-counts-compact" : ""}${groupByDate ? " report-card--show-counts-period" : ""}">
+      <h2>${clean(title)}</h2>
+      <div class="daily-show-count-grid">
+        ${counts.map(([label, key]) => `
+          <div class="daily-show-count daily-show-count--${key}">
+            <small>${label}</small>
+            <strong>${Math.max(0, Math.round(Number(showCounts[key]) || 0))}</strong>
+            <span><small>Ganho estimado:</small> ${key === "ticket"
+              ? formatTicketShowEarnings(showStats.ticket)
+              : `${formatShowTokens(showStats[key]?.earnings)} tk`}</span>
+            ${key === "ticket" ? `<span><small>Ingressos vendidos:</small> ${formatShowTokens(showStats.ticket?.ticketsSold)}</span>` : ""}
+          </div>
+        `).join("")}
+      </div>
+      <p class="daily-show-capture-note">As contagens e os valores são estimados e podem variar. Dependendo do momento em que a extensão é iniciada, alguns anúncios, compras ou gorjetas podem não ser capturados ou podem ser lidos em momentos diferentes.</p>
+      ${groupByDate
+        ? buildPeriodShowFolders(showCounts, showStats)
+        : `
+          ${buildTicketShowBreakdown(showStats.ticket?.ticketShows, compact)}
+          ${buildTimedShowBreakdown(
+            "Detalhamento dos Shows Privados",
+            "Show Privado",
+            showStats.private?.privateShows,
+            compact,
+          )}
+          ${buildTimedShowBreakdown(
+            "Detalhamento dos Shows Exclusivos",
+            "Show Exclusivo",
+            showStats.exclusive?.exclusiveShows,
+            compact,
+          )}
+          ${buildGroupShowBreakdown(showStats.group?.groupShows, compact)}
+        `}
+    </section>
+  `;
+}
+
+function buildManualEarningsForm({
+  dayShowStats = {},
+  liveShowStats = {},
+  manualEntries = [],
+  liveAvailable = false,
+  defaultScope = "day",
+  modelId = "",
+  dateKey = "",
+} = {}) {
+  const showOptions = [
+    ["day", "private", dayShowStats.private?.privateShows, "Show privado"],
+    ["day", "exclusive", dayShowStats.exclusive?.exclusiveShows, "Show exclusivo"],
+    ["live", "private", liveShowStats.private?.privateShows, "Show privado"],
+    ["live", "exclusive", liveShowStats.exclusive?.exclusiveShows, "Show exclusivo"],
+  ].flatMap(([scope, type, shows, label]) =>
+    (shows || []).map((show, index) => {
+      const showId = String(show.id || "");
+      if (!showId) return "";
+      const when = formatShowTime(show.startedAt);
+      return `<option value="${escapeAttribute(showId)}" data-show-scope="${scope}" data-show-type="${type}">${scope === "day" ? "Dia" : "Live"} · ${label} #${index + 1} · ${when}</option>`;
+    }),
+  ).join("");
+  const manualEntryRows = manualEntries.map((entry) => `
+    <li>
+      <span class="manual-entry-description">${clean(entry.type || "Ganho manual")} · ${Math.max(0, Number(entry.manualAmount) || 0)} tk</span>
+      <small>${entry.scope === "live" ? "Live" : "Dia"}${entry.user ? ` · ${clean(entry.user)}` : ""}</small>
+      ${entry.id && modelId && dateKey
+        ? `<button type="button" class="report-delete-manual-entry" data-model-id="${escapeAttribute(modelId)}" data-entry-date="${escapeAttribute(dateKey)}" data-entry-id="${escapeAttribute(entry.id)}" aria-label="Apagar ganho manual: ${clean(entry.type || "Ganho manual")}">Apagar</button>`
+        : ""}
+    </li>
+  `).join("");
+
+  return `
+    <section class="report-card report-card--manual-entry">
+      <h2>Adicionar ganho manual</h2>
+      <form data-manual-entry-form>
+        <div class="manual-entry-grid">
+          <label>Registrar em
+            <select name="scope">
+              <option value="day" ${defaultScope === "day" ? "selected" : ""}>Dia selecionado</option>
+              <option value="live" ${defaultScope === "live" ? "selected" : ""} ${liveAvailable ? "" : "disabled"}>Live selecionada</option>
+            </select>
+          </label>
+          <label>Tipo de ganho
+            <select name="kind">
+              <option value="chat_private">Chat privado</option>
+              <option value="private">Show privado</option>
+              <option value="exclusive">Show exclusivo</option>
+            </select>
+          </label>
+          <label>Valor em tokens
+            <input name="amount" type="number" min="1" step="1" required>
+          </label>
+          <label>Nick do usuário (opcional)
+            <input name="username" type="text" maxlength="64" autocomplete="off">
+          </label>
+          <label class="manual-entry-show-control" data-manual-show-control hidden>Show
+            <select name="showId">
+              <option value="">Criar um novo show manual</option>
+              ${showOptions}
+            </select>
+          </label>
+        </div>
+        <div class="manual-entry-actions">
+          <button type="submit">Adicionar ao relatório</button>
+          <span data-manual-entry-status aria-live="polite"></span>
+        </div>
+      </form>
+      ${manualEntries.length
+        ? `<div class="manual-entry-history"><h3>Ganhos manuais registrados</h3><ul>${manualEntryRows}</ul></div>`
+        : ""}
+    </section>
+  `;
+}
+
+function buildShowsSection(
+  showCounts,
+  showStats,
+  summaryTitle,
+  description,
+  options = {},
+) {
+  return buildReportChartGroup(
+    "Shows",
+    description,
+    "events",
+    [buildDailyShowCountsCard(showCounts, showStats, summaryTitle, options)],
+  );
 }
 
 function buildReportHero({
@@ -221,6 +752,7 @@ function buildGainTypeChart(eventSummaryTotals, daysWithData = 0) {
     "Compra de Conteúdo": ["#34d399", "#0f766e"],
     Menu: ["#fb923c", "#e11d48"],
     Roleta: ["#f472b6", "#8b5cf6"],
+    "Chat privado": ["#38bdf8", "#2563eb"],
     "Show exclusivo": ["#c084fc", "#7c3aed"],
     "Show privado": ["#a78bfa", "#ec4899"],
     Ticket: ["#facc15", "#f97316"],
@@ -280,12 +812,19 @@ function buildPopularItemsChart(
 function buildSafetyTables({
   suspectRows = [],
   mutedRows = [],
+  mutedLogRows = [],
   moderationLogCount = 0,
   moderationSuccessCount = 0,
   moderationFailureCount = 0,
   moderationPendingCount = 0,
+  moderationLogs = [],
+  modelId = "",
   enableSuspectRemoval = false,
+  enableMutedRemoval = false,
+  enableModerationRemoval = false,
   scope = "no per\u00edodo",
+  start = "",
+  end = "",
 }) {
   const suspectHtml = suspectRows.length
     ? `
@@ -314,22 +853,93 @@ function buildSafetyTables({
         <h2>Usu\u00e1rios silenciados</h2>
         <div class="report-table-wrap">
           <table>
-            <thead><tr><th>Usu\u00e1rio</th><th>Por</th></tr></thead>
+            <thead><tr><th>Usu\u00e1rio</th><th>Por</th><th>Data da \u00faltima mensagem</th><th>\u00daltima mensagem</th>${enableMutedRemoval ? "<th>A\u00e7\u00e3o</th>" : ""}</tr></thead>
             <tbody>${mutedRows.slice(0, 20).map((muted) => `
               <tr>
                 <td>${clean(muted.username)}</td>
                 <td>${clean(muted.mutedBy || "—")}</td>
+                <td>${muted.dateKey
+                  ? `${muted.dateKey.slice(8, 10)}/${muted.dateKey.slice(5, 7)}/${muted.dateKey.slice(0, 4)}`
+                  : "—"}</td>
+                <td>${clean(muted.lastMessage || "—")}</td>
+                ${enableMutedRemoval
+                  ? `<td><button type="button" class="report-delete-muted-user" data-model-id="${escapeAttribute(modelId)}" data-username="${escapeAttribute(muted.username)}" data-start-date="${escapeAttribute(start)}" data-end-date="${escapeAttribute(end)}" title="Apagar registros deste usuário no período" aria-label="Apagar registros de ${escapeAttribute(muted.username)} neste período">×</button></td>`
+                  : ""}
               </tr>
             `).join("")}</tbody>
           </table>
         </div>
+        ${enableMutedRemoval ? '<p class="muted-delete-status" role="status" aria-live="polite"></p>' : ""}
       </section>
     `
     : "";
-  const moderationHtml = moderationLogCount > 0
-    ? `<section class="report-card"><h2>Modera\u00e7\u00e3o</h2><p>${moderationLogCount} tentativa(s), ${moderationSuccessCount} confirmada(s), ${moderationFailureCount} falha(s) e ${moderationPendingCount} pendente(s).</p></section>`
+  const mutedHistoryRows = mutedLogRows
+    .slice()
+    .sort((a, b) => (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0));
+  const visibleMutedHistoryRows = mutedHistoryRows.slice(0, 200);
+  const mutedHistoryHtml = visibleMutedHistoryRows.length
+    ? `
+      <section class="report-card">
+        <h2>Mensagens dos usu\u00e1rios silenciados</h2>
+        <details>
+          <summary>Ver mensagens registradas (${mutedHistoryRows.length})</summary>
+          ${mutedHistoryRows.length > visibleMutedHistoryRows.length
+            ? `<p>Mostrando as 200 mensagens mais recentes de ${mutedHistoryRows.length} registros.</p>`
+            : ""}
+          <div class="report-table-wrap">
+            <table>
+              <thead><tr><th>Data</th><th>Usu\u00e1rio</th><th>Por</th><th>Mensagem</th></tr></thead>
+              <tbody>${visibleMutedHistoryRows.map((muted) => `
+                <tr>
+                  <td>${muted.dateKey
+                    ? `${muted.dateKey.slice(8, 10)}/${muted.dateKey.slice(5, 7)}/${muted.dateKey.slice(0, 4)}`
+                    : "—"}</td>
+                  <td>${clean(muted.username)}</td>
+                  <td>${clean(muted.mutedBy || "—")}</td>
+                  <td>${clean(muted.lastMessage || (Array.isArray(muted.recentMessages) ? muted.recentMessages.join(" · ") : "") || "—")}</td>
+                </tr>
+              `).join("")}</tbody>
+            </table>
+          </div>
+        </details>
+      </section>
+    `
     : "";
-  return `${suspectHtml}${mutedHtml}${moderationHtml}`;
+  const moderationRows = moderationLogs
+    .slice()
+    .sort((a, b) => (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0))
+    .map((log) => {
+      const logId = String(log.id || "");
+      const dateKey = String(log.dateKey || "");
+      const timestamp = Number(log.timestamp) || 0;
+      const when = log.time || (timestamp
+        ? new Date(timestamp).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })
+        : dateKey);
+      const deleteButton = enableModerationRemoval && logId && /^\d{4}-\d{2}-\d{2}$/.test(dateKey)
+        ? `<button type="button" class="report-delete-moderation-log" data-model-id="${escapeAttribute(modelId)}" data-entry-date="${escapeAttribute(dateKey)}" data-log-id="${escapeAttribute(logId)}" data-log-user="${escapeAttribute(log.user || "")}" title="Apagar registro de moderação" aria-label="Apagar registro de ${escapeAttribute(log.user || "usuário")}">×</button>`
+        : "";
+      return `
+        <tr>
+          <td>${clean(when)}</td>
+          <td>${clean(log.user || "—")}</td>
+          <td>${clean(log.status || "—")}</td>
+          <td>${clean(log.message || "—")}</td>
+          ${enableModerationRemoval ? `<td>${deleteButton}</td>` : ""}
+        </tr>
+      `;
+    })
+    .join("");
+  const moderationActionHeader = enableModerationRemoval ? "<th>A\u00e7\u00e3o</th>" : "";
+  const moderationDetails = moderationLogs.length
+    ? `<details><summary>Ver registros detalhados (${moderationLogs.length})</summary><div class="report-table-wrap"><table><thead><tr><th>Data/hora</th><th>Usu\u00e1rio</th><th>Status</th><th>Mensagem</th>${moderationActionHeader}</tr></thead><tbody>${moderationRows}</tbody></table></div></details>`
+    : "";
+  const moderationDeleteNote = enableModerationRemoval && moderationLogs.length
+    ? '<p class="timeline-delete-status" role="status" aria-live="polite"></p><small>Apagar um registro remove apenas o detalhe; os totais agregados permanecem iguais.</small>'
+    : "";
+  const moderationHtml = moderationLogCount > 0 || moderationLogs.length > 0
+    ? `<section class="report-card"><h2>Modera\u00e7\u00e3o</h2><p>${moderationLogCount} tentativa(s), ${moderationSuccessCount} confirmada(s), ${moderationFailureCount} falha(s) e ${moderationPendingCount} pendente(s).</p>${moderationDetails}${moderationDeleteNote}</section>`
+    : "";
+  return `${suspectHtml}${mutedHtml}${mutedHistoryHtml}${moderationHtml}`;
 }
 
 export function buildDailyAdditionalMetricsHtml(
@@ -339,6 +949,7 @@ export function buildDailyAdditionalMetricsHtml(
   enableSuspectRemoval = false,
   activityRankings = {},
   leadingChart = "",
+  { showSafetyTables = true } = {},
 ) {
   const showMenuRanking = activityRankings.menu ?? true;
   const showRouletteRanking = activityRankings.roulette ?? true;
@@ -392,18 +1003,20 @@ export function buildDailyAdditionalMetricsHtml(
   const failureCount = moderationStats
     ? Number(moderationStats.failures) || 0
     : logs.filter((log) => String(log.status || "").toUpperCase() === "FALHA").length;
-  const safetyTables = buildSafetyTables({
-    suspectRows,
-    mutedRows,
-    moderationLogCount,
-    moderationSuccessCount: successCount,
-    moderationFailureCount: failureCount,
-    moderationPendingCount: moderationStats
-      ? Number(moderationStats.pending) || 0
-      : logs.filter((log) => String(log.status || "").toUpperCase() === "PENDENTE").length,
-    enableSuspectRemoval,
-    scope: "no dia",
-  });
+  const safetyTables = showSafetyTables
+    ? buildSafetyTables({
+      suspectRows,
+      mutedRows,
+      moderationLogCount,
+      moderationSuccessCount: successCount,
+      moderationFailureCount: failureCount,
+      moderationPendingCount: moderationStats
+        ? Number(moderationStats.pending) || 0
+        : logs.filter((log) => String(log.status || "").toUpperCase() === "PENDENTE").length,
+      enableSuspectRemoval,
+      scope: "no dia",
+    })
+    : "";
   const audience = daily.audienceStats || {};
   const audienceStats = showAudienceStats &&
     (Number(audience.newUsers) || 0) + (Number(audience.returningUsers) || 0) > 0
@@ -571,8 +1184,11 @@ function buildReportInsights(title, insights) {
 
 export function buildSessionReportHtml({
   dateBr,
+  dateKey = "",
+  modelId = "",
   modelName = "",
   session,
+  dayShowStats = {},
   comparisonSession = null,
   timeBars = [],
   audiencePoints = [],
@@ -581,6 +1197,11 @@ export function buildSessionReportHtml({
   if (!session) return buildReportEmptyState("Não há lives registradas para esta data.");
 
   const tokens = Math.round(Number(session.tokens) || 0);
+  const sessionShowData = { capturedEvents: session.capturedEvents };
+  const sessionShowStats = buildDailyShowStats(sessionShowData);
+  const sessionShowCounts = buildDailyShowCounts(sessionShowData);
+  const sessionManualTokens = getManualEntryTotal(session.capturedEvents);
+  const sessionEventMarkers = buildShowEventMarkers(session.capturedEvents);
   const durationSeconds = Math.max(0, Number(session.durationSeconds) || 0);
   const tokensPerHour = durationSeconds > 0
     ? Math.round((tokens / durationSeconds) * 3600)
@@ -631,19 +1252,40 @@ export function buildSessionReportHtml({
       ${buildCombinedAudienceEarningsChart({
         title: "Público e ganhos da live · Ganhos por intervalo da live",
         subtitle: `${clean(session.startedAt || "--:--")} · blocos de ${intervalLabel}`,
+        peakViewers: session.peakViewers,
         audiencePoints: audiencePoints.map((point) => ({
           label: point.label,
           value: point.viewers,
           tooltip: point.tooltip,
         })),
         earningsBars: timeBars,
-        eventMarkers: [],
+        eventMarkers: sessionEventMarkers,
       })}
     </div>
+    ${sessionManualTokens > 0
+      ? `<p class="manual-chart-note">${Math.round(sessionManualTokens)} tk registrados manualmente não são distribuídos nos intervalos do gráfico.</p>`
+      : ""}
     ${buildReportFlowCharts(
       timeBars,
       timeStepMin,
       `${dateBr} · ${session.startedAt || "--:--"}–${session.endedAt || "ativa"}`,
+      audiencePoints,
+      session.peakViewers,
+    )}
+    ${buildManualEarningsForm({
+      dayShowStats,
+      liveShowStats: sessionShowStats,
+      manualEntries: getManualEntryEvents(session.capturedEvents),
+      liveAvailable: Boolean(session.sessionId),
+      defaultScope: "live",
+      modelId,
+      dateKey,
+    })}
+    ${buildShowsSection(
+      sessionShowCounts,
+      sessionShowStats,
+      "Shows registrados nesta live",
+      "Quantidade, ganhos estimados e participantes dos shows desta live.",
     )}
     ${sessionInsights}
     ${buildSessionComparisonTable(session, comparisonSession, dateBr, timeStepMin)}
@@ -659,6 +1301,8 @@ export function buildPeriodAdditionalMetricsHtml(
   showMenuRanking = true,
   showRouletteRanking = true,
   leadingChart = "",
+  enableModerationRemoval = false,
+  enableMutedRemoval = false,
 ) {
   const groupedTimeLabel = summary.isWeekly ? "por semana" : summary.isMonthly ? "por mês" : "por dia";
   const menuChart = showMenuRanking
@@ -714,7 +1358,12 @@ export function buildPeriodAdditionalMetricsHtml(
       </section>
     `
     : "";
-  const safetyTables = buildSafetyTables({ ...summary, enableSuspectRemoval });
+  const safetyTables = buildSafetyTables({
+    ...summary,
+    enableSuspectRemoval,
+    enableMutedRemoval,
+    enableModerationRemoval,
+  });
   return `
     ${buildReportChartGroup(
       "Ligas e comunidade",
@@ -836,7 +1485,7 @@ export function buildDailyReportHtml({
   const sessionBars = buildInteractiveBarsSvg({
     title: "Tokens por live",
     subtitle: report.liveSessions.length > 1
-      ? "Comparação entre sessões do dia"
+      ? "Comparação entre lives do dia"
       : report.liveSessions.length === 1
         ? "Uma live registrada · comparação disponível ao registrar outra"
         : "Nenhuma live registrada neste dia",
@@ -856,7 +1505,7 @@ export function buildDailyReportHtml({
   const sessionDurationBars = report.liveSessions.length > 0
     ? buildInteractiveBarsSvg({
       title: "Duração das lives do dia",
-      subtitle: "Tempo líquido registrado por sessão",
+      subtitle: "Tempo líquido registrado por live",
       bars: report.liveSessions.map((session, index) => {
         const durationSeconds = Math.max(0, Number(session.durationSeconds) || 0);
         return {
@@ -884,16 +1533,20 @@ export function buildDailyReportHtml({
   const tokensWithoutTime = suppliedTokensWithoutTime === null
     ? computedTokensWithoutTime
     : Math.max(0, Number(suppliedTokensWithoutTime) || 0);
-  const dayGainTypes = buildGainTypeRows(daily?.eventSummaryTotals);
+  const dayGainTypes = buildGainTypeRows(report.eventSummaryTotals || daily?.eventSummaryTotals);
   const dayClassifiedTokens = dayGainTypes.reduce((sum, row) => sum + row.value, 0);
+  const dailyManualTokens = getManualEntryTotal(daily);
   const leadingDayGainType = dayGainTypes[0];
   const largestTipTokens = Math.max(0, Number(largestTip?.tokens) || 0);
   const dailyInsights = buildReportInsights("Insights do dia", [
     bestTimeBar && totalDayTokens > 0 && bestTimeBar.value <= totalDayTokens
       ? `${formatTimeBucketRange(bestTimeBar.label, timeStepMin)} foi o melhor intervalo, concentrando ${Math.round((bestTimeBar.value / totalDayTokens) * 100)}% dos tokens do dia.`
       : "",
-    tokensWithoutTime > 0
-      ? `${Math.round(tokensWithoutTime)} tk do total diário não têm horário registrado e não aparecem no gráfico por intervalo.`
+    dailyManualTokens > 0
+      ? `${Math.round(dailyManualTokens)} tk registrados manualmente não são distribuídos no gráfico por intervalo.`
+      : "",
+    tokensWithoutTime > dailyManualTokens
+      ? `${Math.round(tokensWithoutTime - dailyManualTokens)} tk do total diário não têm horário registrado e não aparecem no gráfico por intervalo.`
       : "",
     leadingDayGainType && dayClassifiedTokens > 0
       ? `${leadingDayGainType.label} foi a principal fonte entre os ganhos classificados (${Math.round((leadingDayGainType.value / dayClassifiedTokens) * 100)}% do total categorizado).`
@@ -1021,60 +1674,7 @@ export function buildDailyReportHtml({
       </section>
     `
     : "";
-  const dailyEventMarkers = [];
-  const capturedEvents = Array.isArray(daily?.capturedEvents)
-    ? daily.capturedEvents
-    : daily?.capturedEvents && typeof daily.capturedEvents === "object"
-      ? Object.values(daily.capturedEvents)
-      : [];
-  capturedEvents.forEach((event) => {
-    const combined = `${String(event?.type || "")} ${String(event?.item || "")}`
-      .toLocaleLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "");
-    if (/menu de gorjetas|menu|gorjeta avulsa|roleta|battleship|objetivo epico|compra de conteudo/.test(combined)) return;
-    const showType = /show em grupo/.test(combined)
-      ? "group"
-      : /show privado/.test(combined)
-        ? "private"
-        : /show exclusivo/.test(combined)
-          ? "exclusive"
-          : /ticket show|show (?:por|de) (?:tickets?|ingressos?|bilhetes?|entradas?)/.test(combined)
-            ? "ticket"
-            : "";
-    if (!showType) return;
-    const showBoundary = event?.showBoundary === "end"
-      ? "end"
-      : event?.showBoundary === "start" || /\binicio\b/.test(combined)
-        ? "start"
-        : "";
-    if (!showBoundary && /\b1 min\b/.test(combined)) return;
-    const timestamp = Number(event?.timestamp ?? event?.time) || 0;
-    if (timestamp <= 0) return;
-    const label = new Date(timestamp).toLocaleTimeString("pt-BR", {
-      timeZone: "America/Sao_Paulo",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-    dailyEventMarkers.push({
-      label,
-      timestamp,
-      showType,
-      showBoundary,
-      type: showBoundary === "end"
-        ? "Fim do show"
-        : showBoundary === "start"
-          ? "Início do show"
-          : "Show",
-      tooltip: showType === "ticket"
-        ? `${showBoundary === "end" ? "Fim" : "Início"} do Ticket show`
-        : showBoundary === "end"
-          ? `Fim do show: ${String(event?.item || event?.type || "Show").trim()}`
-          : showBoundary === "start"
-            ? `Início do show: ${String(event?.item || event?.type || "Show").trim()}`
-            : `Show: ${String(event?.item || event?.type || "Show").trim()}`,
-    });
-  });
+  const dailyEventMarkers = buildShowEventMarkers(daily?.capturedEvents);
   const dailyHero = buildReportHero({
     name: report.modelName || "Modelo",
     eyebrow: "Resumo diário",
@@ -1100,6 +1700,7 @@ export function buildDailyReportHtml({
       ${buildCombinedAudienceEarningsChart({
         title: "Público e ganhos no dia · Ganhos por intervalo",
         subtitle: `${report.dateBr} · Blocos de ${timeStepMin === 60 ? "1h" : `${timeStepMin} minutos`}`,
+        peakViewers: report.peakViewers,
         audiencePoints: audiencePoints.map((point) => ({
           label: point.label,
           value: point.viewers,
@@ -1109,7 +1710,13 @@ export function buildDailyReportHtml({
         eventMarkers: dailyEventMarkers,
       })}
     </div>
-    ${buildReportFlowCharts(timeBars, timeStepMin, report.dateBr)}
+    ${buildReportFlowCharts(
+      timeBars,
+      timeStepMin,
+      report.dateBr,
+      audiencePoints,
+      report.peakViewers,
+    )}
     <div class="metric-grid">
       <div class="metric-card metric-card--audience"><small>Pico / média de espectadores</small><strong>${report.peakViewers} / ${report.avgViewers}</strong></div>
       <div class="metric-card metric-card--highlight"><small>Melhor intervalo</small><strong>${bestTimeBar ? `${clean(bestTimeBar.label)} · ${Math.round(bestTimeBar.value)} tk` : "—"}</strong></div>
@@ -1178,11 +1785,28 @@ export function buildDailyReportHtml({
         buildReportUsersChart(report.uPeak, report.uAvg, report.dateBr),
       ],
     )}
+    ${buildShowsSection(
+      report.showCounts,
+      report.showStats,
+      "Shows realizados no dia",
+      "Quantidade, ganhos estimados e participantes dos shows registrados no dia.",
+    )}
+    ${buildManualEarningsForm({
+      dayShowStats: report.showStats,
+      liveShowStats: buildDailyShowStats({
+        capturedEvents: sessionComparison?.sessionA?.capturedEvents,
+      }),
+      manualEntries: getManualEntryEvents(daily),
+      liveAvailable: Boolean(sessionComparison?.sessionA?.sessionId),
+      defaultScope: "day",
+      modelId: report.modelId,
+      dateKey: report.dateKey,
+    })}
     ${buildReportChartGroup(
       "Ganhos por categoria",
       "Composição dos ganhos classificados no dia.",
       "gains",
-      [buildGainTypeChart(daily?.eventSummaryTotals)],
+      [buildGainTypeChart(report.eventSummaryTotals || daily?.eventSummaryTotals)],
     )}
     ${buildReportChartGroup(
       "Desempenho das lives",
@@ -1423,7 +2047,12 @@ function buildGoalShowTimelineHtml(summary) {
 
 export function buildPeriodReportHtml(
   summary,
-  { enableSuspectRemoval = false, comparisonSummary = null } = {},
+  {
+    enableSuspectRemoval = false,
+    enableMutedRemoval = false,
+    enableModerationRemoval = false,
+    comparisonSummary = null,
+  } = {},
 ) {
   const audienceInterval = summary.isWeekly ? "por semana" : summary.isMonthly ? "por mês" : "por dia";
   const audienceCharts = summary.audienceDays > 0
@@ -1985,6 +2614,13 @@ export function buildPeriodReportHtml(
     ${buildAudienceConversionHtml(summary.audienceConversion)}
     ${buildAudienceEfficiencyHtml(summary)}
 
+    ${buildShowsSection(
+      summary.showCounts,
+      summary.showStats,
+      "Resumo dos Shows no período",
+      "Quantidade, ganhos estimados e participantes dos shows registrados no período.",
+      { compact: true, groupByDate: true },
+    )}
     ${buildReportChartGroup(
       "Tendências e ganhos",
       "Tokens e ritmo por período, horário e categoria.",
@@ -2032,7 +2668,7 @@ export function buildPeriodReportHtml(
     )}
     ${buildReportChartGroup(
       "Lives e duração",
-      "Frequência, tempo ao vivo, ganhos e ritmo por sessão.",
+      "Frequência, tempo ao vivo, ganhos e ritmo por live.",
       "lives",
       [
         buildNeonDonutGauge({
@@ -2066,6 +2702,8 @@ export function buildPeriodReportHtml(
       true,
       true,
       buildReportLeaguesChart(summary.periodLeaguePeak, summary.periodLeagueAvg, "Pico / média no período"),
+      enableModerationRemoval,
+      enableMutedRemoval,
     )}
     ${buildReportChartGroup(
       "Padrões de atividade",

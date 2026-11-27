@@ -13,6 +13,8 @@ test("renders the empty event summary with active scope controls", () => {
 
   assert.match(html, /Nenhum evento capturado ainda/);
   assert.match(html, /data-scope="session" style="background:linear-gradient/);
+  assert.match(html, />Live<\/button>/);
+  assert.doesNotMatch(html, />Sessão<\/button>/);
 });
 
 test("merges menu items, sorts totals, and escapes item names", () => {

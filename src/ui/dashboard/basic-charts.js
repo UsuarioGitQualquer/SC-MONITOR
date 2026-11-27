@@ -75,6 +75,7 @@ export function buildNeonWaveAreaChart({
   strokeColor = "#ff2a6d",
   fillStart = "#ff2a6d",
   fillEnd = "#8a2be2",
+  footerNote = "",
 }) {
   if (!Array.isArray(points) || points.length === 0) {
     return `
@@ -84,6 +85,7 @@ export function buildNeonWaveAreaChart({
           <span style="font-size:10px; color:#a5b4fc; background:#222a41; padding:3px 8px; border-radius:99px;">${clean(subtitle || "")}</span>
         </div>
         <div style="font-size:11px; color:#8b92b8; text-align:center; padding:14px 0;">Aguardando dados para traçar curva...</div>
+        ${footerNote ? `<div style="margin-top:5px; color:#8b92b8; font-size:9px;">${clean(footerNote)}</div>` : ""}
       </div>
     `;
   }
@@ -169,6 +171,7 @@ export function buildNeonWaveAreaChart({
         <path d="${pathD}" fill="none" stroke="${strokeColor}" stroke-width="2.4" stroke-linecap="round" />
         ${dotsAndLabels}
       </svg>
+      ${footerNote ? `<div style="margin-top:5px; color:#8b92b8; font-size:9px;">${clean(footerNote)}</div>` : ""}
     </div>
   `;
 }
@@ -176,6 +179,7 @@ export function buildNeonWaveAreaChart({
 export function buildCombinedAudienceEarningsChart({
   title = "Público e ganhos",
   subtitle = "",
+  peakViewers,
   audiencePoints = [],
   earningsBars = [],
   eventMarkers = [],
@@ -183,13 +187,29 @@ export function buildCombinedAudienceEarningsChart({
   const audience = Array.isArray(audiencePoints) ? audiencePoints : [];
   const earnings = Array.isArray(earningsBars) ? earningsBars : [];
   const events = Array.isArray(eventMarkers) ? eventMarkers : [];
+  const actualPeakViewers =
+    peakViewers !== undefined &&
+    peakViewers !== null &&
+    peakViewers !== "" &&
+    Number.isFinite(Number(peakViewers))
+      ? Math.max(0, Math.round(Number(peakViewers)))
+      : null;
+  const peakBadgeHtml = actualPeakViewers === null
+    ? ""
+    : `<span title="Maior público registrado no período" style="font-size:10px; color:#0f1024; background:#f97316; padding:3px 8px; border-radius:99px; white-space:nowrap; font-weight:700;">Pico: ${actualPeakViewers}</span>`;
+  const headerBadgesHtml = `
+    <div style="display:flex; align-items:center; justify-content:flex-end; gap:6px; flex-wrap:wrap;">
+      <span style="font-size:10px; color:#a5b4fc; background:#222a41; padding:3px 8px; border-radius:99px;">${clean(subtitle)}</span>
+      ${peakBadgeHtml}
+    </div>
+  `;
 
   if (audience.length === 0 && earnings.length === 0) {
     return `
       <div class="scm-cyber-card" style="border:1px solid #2b3450; border-radius:12px; background:linear-gradient(145deg,#1b2138,#151a2d);">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; margin-bottom:6px;">
           <strong style="color:#e2e8f0; font-size:12px;">${clean(title)}</strong>
-          <span style="font-size:10px; color:#a5b4fc; background:#222a41; padding:3px 8px; border-radius:99px;">${clean(subtitle)}</span>
+          ${headerBadgesHtml}
         </div>
         <div style="font-size:11px; color:#8b92b8; text-align:center; padding:14px 0;">Aguardando dados de público e ganhos...</div>
       </div>
@@ -233,6 +253,7 @@ export function buildCombinedAudienceEarningsChart({
   if (labels.length === 0) return buildCombinedAudienceEarningsChart({
     title,
     subtitle,
+    peakViewers,
   });
 
   const audienceMap = new Map(audience.map((point) => [normalizeLabel(point.label), point]));
@@ -244,16 +265,14 @@ export function buildCombinedAudienceEarningsChart({
     eventMap.get(label).push(event);
   });
 
-  let lastAudienceValue = null;
   const audienceValues = labels.map((label) => {
     if (audienceMap.has(label)) {
-      lastAudienceValue = Math.max(
+      return Math.max(
         0,
         Number(audienceMap.get(label)?.value ?? audienceMap.get(label)?.viewers) || 0,
       );
-      return lastAudienceValue;
     }
-    return lastAudienceValue;
+    return null;
   });
   const earningsValues = labels.map((label) =>
     Math.max(0, Number(earningsMap.get(label)?.value) || 0),
@@ -266,29 +285,55 @@ export function buildCombinedAudienceEarningsChart({
     : padL + (index / (labels.length - 1)) * plotW;
   const audienceY = (value) => padT + plotH - (value / maxAudience) * plotH;
 
-  const coords = labels.map((label, index) => ({
-    x: xAt(index),
-    y: audienceY(audienceValues[index] ?? 0),
-    value: audienceValues[index] || 0,
-    label,
-  }));
-  let linePath = "";
-  let lastSegmentHasPoint = false;
-  coords.forEach((point, index) => {
-    if (!lastSegmentHasPoint) {
-      linePath += `${linePath ? " M " : "M "}${point.x.toFixed(1)} ${point.y.toFixed(1)}`;
-    } else {
-      linePath += ` L ${point.x.toFixed(1)} ${point.y.toFixed(1)}`;
-    }
-    lastSegmentHasPoint = true;
-  });
-  const areaPath = coords.length > 1
-    ? `${linePath} L ${coords[coords.length - 1].x.toFixed(1)} ${padT + plotH} L ${coords[0].x.toFixed(1)} ${padT + plotH} Z`
-    : "";
-  const peakIndex = coords.reduce(
-    (best, point, index) => point.value > coords[best].value ? index : best,
-    0,
+  const lineLabels = labels.filter(
+    (label) => audienceMap.has(label) || earningsMap.has(label),
   );
+  const coords = lineLabels.map((label) => {
+    const index = labels.indexOf(label);
+    const value = audienceValues[index];
+    return {
+      x: xAt(index),
+      y: value === null ? null : audienceY(value),
+      value,
+      label,
+    };
+  });
+  const audienceSegments = [];
+  let currentAudienceSegment = [];
+  coords.forEach((point, index) => {
+    if (point.value === null) {
+      if (currentAudienceSegment.length) audienceSegments.push(currentAudienceSegment);
+      currentAudienceSegment = [];
+    } else {
+      currentAudienceSegment.push(point);
+    }
+    if (index === coords.length - 1 && currentAudienceSegment.length) {
+      audienceSegments.push(currentAudienceSegment);
+    }
+  });
+  const linePath = audienceSegments
+    .filter((segment) => segment.length > 1)
+    .map((segment) => segment.map((point, index) =>
+      `${index === 0 ? "M" : "L"} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`
+    ).join(" "))
+    .join(" ");
+  const areaPath = audienceSegments
+    .filter((segment) => segment.length > 1)
+    .map((segment) => {
+      const start = segment[0];
+      const end = segment[segment.length - 1];
+      const segmentLine = segment.map((point, index) =>
+        `${index === 0 ? "M" : "L"} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`
+      ).join(" ");
+      return `${segmentLine} L ${end.x.toFixed(1)} ${padT + plotH} L ${start.x.toFixed(1)} ${padT + plotH} Z`;
+    })
+    .join(" ");
+  let peakIndex = -1;
+  coords.forEach((point, index) => {
+    if (point.value !== null && (peakIndex < 0 || point.value > coords[peakIndex].value)) {
+      peakIndex = index;
+    }
+  });
 
   const labelEvery = Math.max(1, Math.ceil(labels.length / 7));
   const barSlot = plotW / labels.length;
@@ -305,7 +350,7 @@ export function buildCombinedAudienceEarningsChart({
   }).join("");
 
   const audienceSvg = coords.map((point, index) => {
-    if (audienceValues[index] === null) return "";
+    if (point.value === null) return "";
     const showLabel = index % labelEvery === 0 || index === coords.length - 1;
     const isPeak = index === peakIndex && point.value > 0;
     const tooltip = clean(audienceMap.get(point.label)?.tooltip || `${point.label}: ${point.value} espectadores`);
@@ -377,6 +422,16 @@ export function buildCombinedAudienceEarningsChart({
     const endBorder = span.end
       ? `<line x1="${endX.toFixed(1)}" y1="${padT}" x2="${endX.toFixed(1)}" y2="${padT + plotH}" stroke="${style.color}" stroke-width="1.5" />`
       : `<line x1="${endX.toFixed(1)}" y1="${padT}" x2="${endX.toFixed(1)}" y2="${padT + plotH}" stroke="${style.color}" stroke-width="1.5" stroke-dasharray="3,3" />`;
+    if (startIndex === endIndex && span.end) {
+      const labelX = startX < width / 2 ? startX + 5 : startX - 5;
+      const anchor = startX < width / 2 ? "start" : "end";
+      return `
+        <line x1="${startX.toFixed(1)}" y1="${padT}" x2="${startX.toFixed(1)}" y2="${padT + plotH}" stroke="${style.color}" stroke-width="1.5">
+          <title>${tooltip}</title>
+        </line>
+        <text x="${labelX.toFixed(1)}" y="${padT + 12}" text-anchor="${anchor}" fill="${style.color}" font-size="9" font-weight="700" font-family="sans-serif">${style.label} (&lt;1 min)</text>
+      `;
+    }
     return `
       <rect x="${spanX.toFixed(1)}" y="${padT}" width="${spanWidth.toFixed(1)}" height="${plotH}" fill="${style.color}" fill-opacity="0.14" stroke="${style.color}" stroke-opacity="0.5" stroke-width="0.8">
         <title>${tooltip}</title>
@@ -437,7 +492,7 @@ export function buildCombinedAudienceEarningsChart({
     <div class="scm-cyber-card" style="border:1px solid #2b3450; border-radius:12px; background:linear-gradient(145deg,#1b2138,#151a2d);">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; gap:6px;">
         <strong style="color:#e2e8f0; font-size:12px;">${clean(title)}</strong>
-        <span style="font-size:10px; color:#a5b4fc; background:#222a41; padding:3px 8px; border-radius:99px;">${clean(subtitle)}</span>
+        ${headerBadgesHtml}
       </div>
       <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${clean(title)}" style="width:100%; height:auto; display:block;">
         <defs>
@@ -454,7 +509,7 @@ export function buildCombinedAudienceEarningsChart({
         ${barsSvg}
         ${unmatchedShowEndsSvg}
         ${eventSvg}
-        ${coords.length > 1 ? `<path d="${linePath}" fill="none" stroke="#ff86ad" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />` : ""}
+        ${linePath ? `<path d="${linePath}" fill="none" stroke="#ff86ad" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />` : ""}
         ${audienceSvg}
       </svg>
       <div style="display:flex; flex-wrap:wrap; gap:12px; margin-top:4px; color:#aab3d6; font-size:9px;">
@@ -466,6 +521,9 @@ export function buildCombinedAudienceEarningsChart({
         }).join("")}
         ${hasOtherEventMarkers ? `<span><i style="display:inline-block;width:7px;height:7px;margin-right:5px;border-radius:50%;background:#fbbf24;vertical-align:middle;"></i>Shows</span>` : ""}
       </div>
+      <div style="margin-top:5px; color:#8b92b8; font-size:9px;">
+        Trechos sem preenchimento indicam que não foi possível coletar dados de público nesses intervalos.
+      </div>
     </div>
   `;
 }
@@ -473,7 +531,7 @@ export function buildCombinedAudienceEarningsChart({
 export function buildAudienceLeagueChart(
   points = [],
   sessionPeak = 0,
-  intervalLabel = "Média por bloco de 2 min • sessão atual",
+  intervalLabel = "Média por bloco de 2 min • live atual",
 ) {
     points = Array.isArray(points) ? points : [];
     const width = 360;

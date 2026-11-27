@@ -5,6 +5,7 @@ const previousChrome = globalThis.chrome;
 const previousIndexedDB = globalThis.indexedDB;
 const messageListeners = [];
 const sentTabMessages = [];
+const createdTabs = [];
 let localData = {};
 let indexedData = {};
 let monitoringActive = false;
@@ -34,6 +35,10 @@ globalThis.chrome = {
   tabs: {
     onRemoved: { addListener: () => {} },
     onUpdated: { addListener: () => {} },
+    create: (options, callback) => {
+      createdTabs.push(options);
+      callback({ id: 99 });
+    },
     query: (_query, callback) => callback(stripchatTabs),
     sendMessage: (tabId, message, callback) => {
       sentTabMessages.push({ tabId, message });
@@ -160,6 +165,16 @@ function sendReportsMessage(message) {
   });
 }
 
+function sendOpenReportsMessage(sender) {
+  return new Promise((resolve) => {
+    const message = { type: "SCM_OPEN_REPORTS" };
+    const listener = messageListeners.find((candidate) =>
+      candidate(message, sender, resolve),
+    );
+    assert.ok(listener);
+  });
+}
+
 function sendStorageRequest(message) {
   return new Promise((resolve) => {
     const sender = { id: "extension-id" };
@@ -225,6 +240,20 @@ serialTest("uses IndexedDB without importing legacy local storage", async () => 
       "SCM_FINISH_BACKUP_RESTORE",
     ],
   );
+});
+
+serialTest("opens reports in the regular extension window when requested from incognito", async () => {
+  createdTabs.length = 0;
+  const result = await sendOpenReportsMessage({
+    id: "extension-id",
+    url: "https://stripchat.com/model",
+    tab: { id: 7, windowId: 42, incognito: true },
+  });
+
+  assert.deepEqual(result, { ok: true, tabId: 99 });
+  assert.deepEqual(createdTabs, [{
+    url: "chrome-extension://extension-id/reports.html",
+  }]);
 });
 
 serialTest("restores only a selected model and keeps all other model data", async () => {
@@ -478,6 +507,138 @@ serialTest("deletes an individual period timeline goal from daily and snapshot d
   assert.deepEqual(
     indexedData[snapshotKey].value.dailyBuckets[dateKey].goalsSnapshot,
     [],
+  );
+});
+
+serialTest("deletes moderation details while preserving daily aggregates and syncing copies", async () => {
+  monitoringActive = false;
+  const dateKey = "2026-11-23";
+  const log = {
+    id: "moderation-1",
+    timestamp: 1795485300000,
+    user: "SpamUser",
+    message: "spam",
+    status: "SUCESSO",
+  };
+  const remainingLog = {
+    id: "moderation-2",
+    timestamp: 1795485400000,
+    user: "OtherUser",
+    message: "other",
+    status: "FALHA",
+  };
+  const dailyKey = `scm:model:model-a:daily:${dateKey}`;
+  const snapshotKey = "scm:model:model-a";
+  const moderationStats = { attempts: 2, successes: 1, failures: 1, pending: 0 };
+  const moderationHourlyTotals = { 12: 2 };
+  indexedData = {
+    [dailyKey]: {
+      key: dailyKey,
+      value: {
+        moderationLogs: [log, remainingLog],
+        moderationStats,
+        moderationHourlyTotals,
+      },
+    },
+    [snapshotKey]: {
+      key: snapshotKey,
+      value: {
+        moderationLogs: [log, remainingLog],
+        dailyBuckets: {
+          [dateKey]: {
+            moderationLogs: [log, remainingLog],
+            moderationStats,
+            moderationHourlyTotals,
+          },
+        },
+      },
+    },
+  };
+
+  const result = await sendReportsMessage({
+    type: "SCM_DELETE_MODERATION_LOG",
+    modelId: "model-a",
+    dateKey,
+    logId: log.id,
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(indexedData[dailyKey].value.moderationLogs, [remainingLog]);
+  assert.deepEqual(indexedData[dailyKey].value.moderationStats, moderationStats);
+  assert.deepEqual(indexedData[dailyKey].value.moderationHourlyTotals, moderationHourlyTotals);
+  assert.deepEqual(indexedData[dailyKey].value.moderationLogDeletedIds, [log.id]);
+  assert.deepEqual(indexedData[snapshotKey].value.moderationLogs, [remainingLog]);
+  assert.deepEqual(
+    indexedData[snapshotKey].value.dailyBuckets[dateKey].moderationLogs,
+    [remainingLog],
+  );
+  assert.deepEqual(
+    indexedData[snapshotKey].value.dailyBuckets[dateKey].moderationStats,
+    moderationStats,
+  );
+  assert.ok(sentTabMessages.some((entry) =>
+    entry.message.type === "SCM_MODERATION_LOG_DELETED" &&
+    entry.message.logId === log.id,
+  ));
+});
+
+serialTest("marks muted-user details deleted only on selected dates", async () => {
+  monitoringActive = false;
+  const firstDate = "2026-11-23";
+  const secondDate = "2026-11-24";
+  const outsideDate = "2026-11-25";
+  const dailyKey = (dateKey) => `scm:model:model-a:daily:${dateKey}`;
+  const snapshotKey = "scm:model:model-a";
+  const muted = { username: "Muted", timestamp: 100 };
+  const other = { username: "Other", timestamp: 200 };
+  indexedData = {
+    [dailyKey(firstDate)]: {
+      key: dailyKey(firstDate),
+      value: { mutedUsers: [muted, other] },
+    },
+    [dailyKey(secondDate)]: {
+      key: dailyKey(secondDate),
+      value: { mutedUsers: [muted] },
+    },
+    [dailyKey(outsideDate)]: {
+      key: dailyKey(outsideDate),
+      value: { mutedUsers: [muted] },
+    },
+    [snapshotKey]: {
+      key: snapshotKey,
+      value: {
+        dailyBuckets: {
+          [firstDate]: { mutedUsers: [muted, other] },
+          [secondDate]: { mutedUsers: [muted] },
+          [outsideDate]: { mutedUsers: [muted] },
+        },
+      },
+    },
+  };
+
+  const result = await sendReportsMessage({
+    type: "SCM_DELETE_MUTED_USER_RECORDS",
+    username: "Muted",
+    dailyRecords: [
+      { modelId: "model-a", dateKey: firstDate },
+      { modelId: "model-a", dateKey: secondDate },
+    ],
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.removedDates, 2);
+  assert.deepEqual(indexedData[dailyKey(firstDate)].value.mutedUsers, [muted, other]);
+  assert.deepEqual(indexedData[dailyKey(firstDate)].value.mutedUserDeletedIds, ["muted|100"]);
+  assert.deepEqual(indexedData[dailyKey(secondDate)].value.mutedUsers, [muted]);
+  assert.deepEqual(indexedData[dailyKey(secondDate)].value.mutedUserDeletedIds, ["muted|100"]);
+  assert.deepEqual(indexedData[dailyKey(outsideDate)].value.mutedUsers, [muted]);
+  assert.deepEqual(
+    indexedData[snapshotKey].value.dailyBuckets[firstDate].mutedUsers,
+    [muted, other],
+  );
+  assert.deepEqual(
+    indexedData[snapshotKey].value.dailyBuckets[outsideDate].mutedUsers,
+    [muted],
   );
 });
 

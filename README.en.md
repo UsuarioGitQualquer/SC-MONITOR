@@ -1,4 +1,4 @@
-SC MONITOR - VERSION 5.0
+SC MONITOR - VERSION 5.0.3
 ========================================================================
 
        Local audience, chat, tips, goals, and moderation dashboard
@@ -8,9 +8,12 @@ SC MONITOR - VERSION 5.0
 
 SC Monitor is a Chromium browser extension that monitors activity in
 Stripchat rooms in real time. Data is processed and stored locally in the
-browser. Version 5.0 improves data stability during long broadcasts and
-expands analysis with heatmaps, audience efficiency, league engagement, and
-a combined goals-and-shows timeline.
+browser. Version 5.0.3 improves offline status and chat activity detection so
+automatic notifications and updates to existing messages do not prevent an
+offline live from ending after two minutes without new real chat messages. It
+retains the 5.0 improvements: better data stability during long broadcasts and
+analysis with heatmaps, audience efficiency, league engagement, and a
+combined goals-and-shows timeline.
 
 
 ------------------------------------------------------------------------
@@ -132,6 +135,11 @@ WEEKDAY COMPARISONS AND TRANSPARENT METRICS
    - The extension can attempt to mute a user through a confirmation dialog
      and keeps a complete history (PENDING, SUCCESS, or FAILURE).
 
+   - The Moderation tab shows messages from the current day. Reports retain
+     history from other days, including messages sent by muted users. In a
+     period report, muted-user details can be removed only from the selected
+     period without changing aggregate totals.
+
    - Muted users are robustly detected in chat (.user-muted-message), with
      the author, moderator, and most recently captured message recorded.
 
@@ -140,8 +148,11 @@ WEEKDAY COMPARISONS AND TRANSPARENT METRICS
 
    - Independent timers track total elapsed time and net active time.
 
-   - In Monitor Room mode, an offline-room indication waits for 2 minutes and
-     is extended by new messages before monitoring ends.
+   - In Monitor Room mode, when the model goes offline, SC Monitor waits at
+     least 2 minutes. Each new real chat message restarts the wait; automatic
+     notifications and updates to existing messages do not. If there are no
+     messages for that long, the live ends; if the model returns afterward, a
+     new live starts.
 
    - The panel can be dragged by its header or inner bottom bar, which shows
      the date and logo. Its size can be adjusted from all four corners. The
@@ -155,10 +166,24 @@ WEEKDAY COMPARISONS AND TRANSPARENT METRICS
 
    - Export complete user, visit, time, and token reports in CSV format.
 
-   - Detailed reports are available on a dedicated extension page, opened from
-     the popup or panel. Period reports also show daily changes in new and
-     returning users when that data was saved. The current room king for each
-     day is also recorded and shown in daily and period summaries.
+   - The Reports Page is the extension's dedicated report page. Open it from
+     the popup or with the "↗ Report page" button in the panel's Report tab.
+     It contains
+     detailed reports, model and date filters, CSV export, and backup and data
+     deletion tools. Period reports also show daily changes in new and returning
+     users when that data was saved. The current room king for each day is also
+     recorded and shown in daily and period summaries. The Shows section
+     summarizes show counts and estimated earnings, and shows each show's
+     start and end times. Ticket shows also display tickets sold and their
+     prices, and ticket/group shows have expandable participant lists when
+     names were captured. Each user appears once with their number of entries.
+     Period reports organize shows in collapsible folders by type and then by
+     date, while captured participant lists remain available.
+     Day and Live reports also allow manual entries for private-chat, private
+     show, and exclusive-show earnings, with an optional username. For private
+     and exclusive shows, attach the entry to an existing show or create a new
+     one; values are included in day, live, and period totals.
+     Unsubmitted values are preserved when the report refreshes.
 
    - Chart intervals are selected automatically based on the recorded
      duration:
@@ -171,22 +196,26 @@ WEEKDAY COMPARISONS AND TRANSPARENT METRICS
 
    HOW TO READ THE REPORT CHARTS
 
-   - The page offers three views: Day, Session, and Period. Choose a model/room
-     and the available data. For a period report, set the date range and group
-     results by day, week, or month. You can also compare two periods.
+   - On the Reports Page, choose one of three views: Day, Live, or Period.
+     Select a model/room and the available data. For a period report, set the
+     date range and group results by day, week, or month. You can also compare
+     two periods. Filter selections are retained when the page is reloaded.
 
-   - In Day and Session reports, the combined chart shows tokens per interval
-     alongside audience changes. The daily report marks recorded shows. Flow
-     charts break down tokens and listed users; choose a block size or use Auto
-     to adjust it to the recorded duration. Tokens without a timestamp are
-     shown separately and are not artificially assigned to blocks.
+   - In Day and Live reports, the combined chart shows tokens per interval
+     alongside audience changes and marks recorded show types. The Shows
+     section summarizes counts and estimated earnings, with expandable lists
+     of participants in each ticket or group show. Flow charts break down
+     tokens and listed users; choose a block size or use Auto to adjust it to
+     the recorded duration. Tokens without a timestamp are shown separately
+     and are not artificially assigned to blocks.
 
    - The daily report's audience charts and metrics show retention, user
      peaks/averages, and league distribution. Earnings composition groups
      tokens by category. Performance charts compare duration and tokens across
      the day's live sessions. Rankings show top individual tips, menu options,
      and recorded roulette results. Tables also show sessions, tippers,
-     suspected users, and muted users when data is available.
+     suspected users, and muted users when data is available. The daily
+     summary also counts shows by type: ticket, private, exclusive, and group.
 
    - The Session report's combined chart shows audience and earnings over the
      selected live's intervals. It also includes token and listed-user flow,
@@ -284,16 +313,18 @@ TABS
      requests and room goals; click a task to mark it complete.
 
    - 🛡️ Moderation: lets you register prohibited words and phrases and review
-     moderated messages and muted users. The extension can attempt to mute
-     identified messages; check the history to see the result.
+     current-day moderated messages and muted users. Period reports retain
+     historical records and their messages; removing a detail does not change
+     aggregate totals.
 
    - 🗂️ History: lists rooms/models and saved daily data, with actions for
      those records. It also supports full or model-specific backup export and
      import. Pause monitoring in every open tab before restoring.
 
    - 📑 Report: compares session, daily, or period data. Select the room and
-     dates to view charts and metrics; use "Page" to open detailed reports.
-     "Copy Summary" and "CSV" export data from the selected report.
+     dates to view charts and metrics; the "↗ Report page" button opens the
+     Reports Page with detailed reports. "Copy Summary" and "CSV" export data from the
+     selected report.
 
 
 PANEL CONTROLS
@@ -311,11 +342,15 @@ PANEL CONTROLS
      list, then returns to chat. It does not start monitoring on its own.
 
    - Monitor Room (OFF ⇄ ON): automatically follows the open room. Collection
-     starts when a live broadcast is detected and ends after 2 minutes
-     offline without new chat messages. Messages extend the wait; returning
-     live cancels the stop. Navigating to another room ends collection for the
-     monitored room. Turning this option off disables automation but does not
-     pause a session that is already being monitored; use "Pause Monitor".
+     starts when a live broadcast is detected. When the model goes offline, it
+     waits at least 2 minutes; each new real chat message restarts the wait,
+     but automatic notifications and updates to existing messages do not. If
+     the model returns before monitoring stops, the same live continues; if it
+     returns afterward, a new live starts. Refreshing the page or leaving and
+     re-entering the room continues to start a new live, as it does today.
+     Navigating to another room ends collection for the monitored room. Turning
+     this option off disables automation but does not pause monitoring already
+     in progress; use "Pause Monitor".
 
    - Pin: keeps the panel open when clicking outside it. Use "Close" to close
      the panel.
@@ -461,6 +496,8 @@ Allow use in Incognito windows (optional):
    - Scroll down to "Allow in incognito".
    - Turn on the option to allow the extension on Stripchat pages opened in
      an Incognito window.
+   - Reports open in a regular window to use the data shared with the rest of
+     the extension.
 
 
 ------------------------------------------------------------------------

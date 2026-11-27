@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildAudienceChartPoints,
+  buildDailyShowStats,
+  buildDailyShowCounts,
   buildDailyReportChartData,
   buildDonorRows,
   buildReportData,
@@ -18,6 +20,411 @@ import {
   listPeriodReportDateKeys,
   mergeDailyReportBuckets,
 } from "../src/ui/report-data.js";
+
+test("counts unique daily show starts by type, excluding minutes, ends, and ticket purchases", () => {
+  const daily = {
+    capturedEvents: [
+      { id: "ticket-start", type: "Ticket show", item: "Ticket show (Início)", showBoundary: "start" },
+      { id: "ticket-start", type: "Ticket show", item: "Ticket show (Início)", showBoundary: "start" },
+      { id: "ticket-minute", type: "Ticket show", item: "Ticket show (1 min)" },
+      { id: "ticket-end", type: "Ticket show", item: "Ticket show (Fim)", showBoundary: "end" },
+      { id: "private-start", type: "Show Privado", item: "Show Privado (Início)", showBoundary: "start" },
+      { id: "exclusive-start", type: "Show Exclusivo", item: "Show Exclusivo (Início)", showBoundary: "start" },
+      { id: "group-start", type: "Show em Grupo", item: "Show em Grupo (Início)", showBoundary: "start" },
+      { id: "ticket-purchase", type: "Ingresso Ticket", item: "Compra de Ingresso", showBoundary: "start" },
+    ],
+  };
+  const expectedCounts = {
+    ticket: 1,
+    private: 1,
+    exclusive: 1,
+    group: 1,
+  };
+
+  assert.deepEqual(buildDailyShowCounts(daily), expectedCounts);
+  assert.deepEqual(
+    buildReportData(
+      { modelId: "test-model", modelName: "Test", dateKey: "2026-11-22" },
+      daily,
+    ).showCounts,
+    expectedCounts,
+  );
+});
+
+test("estimates daily show earnings and ticket sales for each ticket show", () => {
+  const daily = {
+    capturedEvents: [
+      { id: "ticket-participant-1", timestamp: 95, type: "Participante de show", item: "TicketAlice", user: "TicketAlice", showParticipantType: "ticket" },
+      { id: "ticket-start-1", timestamp: 100, type: "Ticket show", item: "Ticket show (Início)", showBoundary: "start", ticketPrice: 20 },
+      { id: "ticket-participant-reentry", timestamp: 105, type: "Participante de show", item: "TicketAlice", user: "TicketAlice", showParticipantType: "ticket" },
+      { id: "ticket-sale-1", timestamp: 110, type: "Ingresso Ticket", item: "Compra de Ingresso (A)", price: 1 },
+      { id: "ticket-sale-2", timestamp: 120, type: "Ingresso Ticket", item: "Compra de Ingresso (B)", price: 20 },
+      { id: "ticket-end-1", timestamp: 150, type: "Ticket show", item: "Ticket show (Fim)", showBoundary: "end" },
+      { id: "ticket-start-2", timestamp: 200, type: "Ticket show", item: "Ticket show (Início)", showBoundary: "start", ticketPrice: 35 },
+      { id: "ticket-sale-3", timestamp: 210, type: "Ingresso Ticket", item: "Compra de Ingresso (C)", price: 35 },
+      { id: "ticket-end-2", timestamp: 250, type: "Ticket show", item: "Ticket show (Fim)", showBoundary: "end" },
+      { id: "private-start", timestamp: 300, type: "Show Privado", item: "Show Privado (Início)", showBoundary: "start", tokens: 12 },
+      { id: "private-minute", timestamp: 360, type: "Show Privado", item: "Show Privado (1 min)", tokens: 12 },
+      { id: "private-end", timestamp: 400, type: "Show Privado", item: "Show Privado (Fim)", showBoundary: "end" },
+      { id: "exclusive-start", timestamp: 500, type: "Show Exclusivo", item: "Show Exclusivo (Início)", showBoundary: "start", tokens: 25 },
+      { id: "exclusive-end", timestamp: 550, type: "Show Exclusivo", item: "Show Exclusivo (Fim)", showBoundary: "end" },
+      { id: "group-start", timestamp: 600, type: "Show em Grupo", item: "Show em Grupo (Início)", showBoundary: "start", tokens: 10 },
+      { id: "group-participant-1", timestamp: 610, type: "Participante de show", item: "GroupAlice", user: "GroupAlice", showParticipantType: "group" },
+      { id: "group-participant-duplicate", timestamp: 620, type: "Participante de show", item: "groupalice", user: "groupalice", showParticipantType: "group" },
+      { id: "group-participant-2", timestamp: 630, type: "Participante de show", item: "GroupBob", user: "GroupBob", showParticipantType: "group" },
+      { id: "group-minute", timestamp: 660, type: "Show em Grupo", item: "Show em Grupo (1 min)", tokens: 10 },
+      { id: "group-end", timestamp: 700, type: "Show em Grupo", item: "Show em Grupo (Fim)", showBoundary: "end" },
+    ],
+  };
+  const stats = buildDailyShowStats(daily);
+
+  assert.deepEqual(stats, {
+    ticket: {
+      count: 2,
+      earnings: 75,
+      ticketsSold: 3,
+      unpricedTicketsSold: 0,
+      ticketShows: [
+        {
+          startedAt: 100,
+          endedAt: 150,
+          ticketPrice: 20,
+          ticketsSold: 2,
+          unpricedTicketsSold: 0,
+          earnings: 40,
+          ticketPriceBreakdown: [{ price: 20, quantity: 2 }],
+          participants: ["TicketAlice"],
+          participantEntries: [{ name: "TicketAlice", count: 2 }],
+        },
+        {
+          startedAt: 200,
+          endedAt: 250,
+          ticketPrice: 35,
+          ticketsSold: 1,
+          unpricedTicketsSold: 0,
+          earnings: 35,
+          ticketPriceBreakdown: [{ price: 35, quantity: 1 }],
+          participants: [],
+          participantEntries: [],
+        },
+      ],
+    },
+    private: {
+      count: 1,
+      earnings: 24,
+      privateShows: [{ startedAt: 300, endedAt: 400, earnings: 24 }],
+    },
+    exclusive: {
+      count: 1,
+      earnings: 25,
+      exclusiveShows: [{ startedAt: 500, endedAt: 550, earnings: 25 }],
+    },
+    group: {
+      count: 1,
+      earnings: 20,
+      groupShows: [{
+        startedAt: 600,
+        endedAt: 700,
+        earnings: 20,
+        participants: ["GroupAlice", "GroupBob"],
+        participantEntries: [
+          { name: "GroupAlice", count: 2 },
+          { name: "GroupBob", count: 1 },
+        ],
+      }],
+    },
+  });
+  assert.deepEqual(
+    buildReportData(
+      { modelId: "test-model", modelName: "Test", dateKey: "2026-11-22" },
+      daily,
+    ).showStats,
+    stats,
+  );
+});
+
+test("closes a ticket show when the next one starts without an end marker", () => {
+  const stats = buildDailyShowStats({
+    capturedEvents: [
+      { id: "ticket-start-1", timestamp: 100, type: "Ticket show", item: "Ticket show (Início)", showBoundary: "start" },
+      { id: "ticket-user-1", timestamp: 110, type: "Participante de show", item: "FirstUser", user: "FirstUser", showParticipantType: "ticket" },
+      { id: "ticket-start-2", timestamp: 200, type: "Ticket show", item: "Ticket show (Início)", showBoundary: "start" },
+      { id: "ticket-user-2", timestamp: 210, type: "Participante de show", item: "SecondUser", user: "SecondUser", showParticipantType: "ticket" },
+    ],
+  });
+
+  assert.equal(stats.ticket.count, 2);
+  assert.equal(stats.ticket.ticketShows[0].endedAt, 200);
+  assert.deepEqual(stats.ticket.ticketShows[0].participants, ["FirstUser"]);
+  assert.equal(stats.ticket.ticketShows[1].endedAt, null);
+  assert.deepEqual(stats.ticket.ticketShows[1].participants, ["SecondUser"]);
+});
+
+test("includes known ticket buyers in the associated show participants", () => {
+  const stats = buildDailyShowStats({
+    capturedEvents: [
+      { id: "ticket-sale-before", timestamp: 95, type: "Ingresso Ticket", user: "EarlyBuyer" },
+      { id: "ticket-start", timestamp: 100, type: "Ticket show", item: "Ticket show (Início)", showBoundary: "start" },
+      { id: "ticket-sale-during", timestamp: 110, type: "Ingresso Ticket", user: "Buyer" },
+      { id: "ticket-join", timestamp: 120, type: "Participante de show", item: "Attendee", user: "Attendee", showParticipantType: "ticket" },
+      { id: "ticket-end", timestamp: 150, type: "Ticket show", item: "Ticket show (Fim)", showBoundary: "end" },
+    ],
+  });
+
+  assert.deepEqual(stats.ticket.ticketShows[0].participants, [
+    "EarlyBuyer",
+    "Buyer",
+    "Attendee",
+  ]);
+  assert.equal(stats.ticket.ticketShows[0].ticketsSold, 2);
+});
+
+test("does not estimate ticket revenue from a sale amount without a recorded show price", () => {
+  const stats = buildDailyShowStats({
+    capturedEvents: [
+      {
+        id: "ticket-start-unknown-price",
+        timestamp: 100,
+        type: "Ticket show",
+        item: "Ticket show (Início)",
+        showBoundary: "start",
+        ticketPrice: 0,
+      },
+      {
+        id: "ticket-sale-unknown-price",
+        timestamp: 110,
+        type: "Ingresso Ticket",
+        item: "Compra de Ingresso",
+        price: 1,
+      },
+    ],
+  });
+
+  assert.equal(stats.ticket.earnings, 0);
+  assert.equal(stats.ticket.ticketsSold, 1);
+  assert.equal(stats.ticket.unpricedTicketsSold, 1);
+  assert.equal(stats.ticket.ticketShows[0].earnings, 0);
+  assert.equal(stats.ticket.ticketShows[0].unpricedTicketsSold, 1);
+});
+
+test("reconstructs an unretained ticket-show start and infers repeated sale prices", () => {
+  const stats = buildDailyShowStats({
+    capturedEvents: [
+      { id: "early-ticket-sale-1", timestamp: 100, type: "Ingresso Ticket", user: "BuyerOne", price: 16 },
+      { id: "early-ticket-sale-2", timestamp: 110, type: "Ingresso Ticket", user: "BuyerTwo", price: 16 },
+      { id: "orphan-ticket-end", timestamp: 150, type: "Ticket show", item: "Ticket show (Fim)", showBoundary: "end" },
+      { id: "ticket-start", timestamp: 200, type: "Ticket show", item: "Ticket show (Início)", showBoundary: "start", ticketPrice: 0 },
+      { id: "ticket-sale-1", timestamp: 210, type: "Ingresso Ticket", user: "BuyerThree", price: 16 },
+      { id: "ticket-sale-2", timestamp: 220, type: "Ingresso Ticket", user: "BuyerFour", price: 16 },
+      { id: "ticket-end", timestamp: 250, type: "Ticket show", item: "Ticket show (Fim)", showBoundary: "end" },
+    ],
+  });
+
+  assert.equal(stats.ticket.count, 2);
+  assert.equal(stats.ticket.ticketsSold, 4);
+  assert.equal(stats.ticket.earnings, 64);
+  assert.equal(stats.ticket.unpricedTicketsSold, 0);
+  assert.equal(stats.ticket.ticketShows[0].startedAt, 100);
+  assert.equal(stats.ticket.ticketShows[0].endedAt, 150);
+  assert.equal(stats.ticket.ticketShows[0].inferredStart, true);
+  assert.equal(stats.ticket.ticketShows[0].ticketPrice, 16);
+  assert.deepEqual(stats.ticket.ticketShows[0].participants, ["BuyerOne", "BuyerTwo"]);
+  assert.equal(stats.ticket.ticketShows[1].ticketPrice, 16);
+  assert.equal(stats.ticket.ticketShows[1].earnings, 32);
+});
+
+test("includes manual gains in day, live, and period totals and show participants", () => {
+  const dateKey = "2026-11-25";
+  const daily = {
+    date: dateKey,
+    totalTokensDay: 100,
+    capturedEvents: [
+      { id: "day-private-start", timestamp: 10, type: "Show Privado", item: "Show Privado (Início)", showBoundary: "start", tokens: 10 },
+      { id: "day-private-end", timestamp: 20, type: "Show Privado", item: "Show Privado (Fim)", showBoundary: "end" },
+      { id: "live-private-start", timestamp: 50, type: "Show Privado", item: "Show Privado (Início)", showBoundary: "start", tokens: 8 },
+      { id: "live-private-end", timestamp: 70, type: "Show Privado", item: "Show Privado (Fim)", showBoundary: "end" },
+    ],
+    manualEarnings: [
+      {
+        id: "manual-day-show",
+        timestamp: 30,
+        type: "Show Privado",
+        item: "Show privado · ganho manual",
+        manualEntry: true,
+        manualAmount: 20,
+        user: "DayNick",
+        manualShowTargetId: "day-private-start",
+        scope: "day",
+        price: 20,
+        tokens: 20,
+      },
+      {
+        id: "manual-live-show",
+        timestamp: 80,
+        type: "Show Privado",
+        item: "Show privado · ganho manual",
+        manualEntry: true,
+        manualAmount: 12,
+        user: "LiveNick",
+        manualShowTargetId: "live-private-start",
+        scope: "live",
+        sessionId: "live-1",
+        price: 12,
+        tokens: 12,
+      },
+      {
+        id: "manual-chat-private",
+        timestamp: 90,
+        type: "Chat privado",
+        item: "Ganho manual de chat privado",
+        manualEntry: true,
+        manualAmount: 5,
+        scope: "day",
+        price: 5,
+        tokens: 5,
+      },
+    ],
+    liveSessions: {
+      "live-1": {
+        sessionId: "live-1",
+        tokens: 30,
+        capturedEvents: [
+          { id: "live-private-start", timestamp: 50, type: "Show Privado", item: "Show Privado (Início)", showBoundary: "start", tokens: 8 },
+          { id: "live-private-end", timestamp: 70, type: "Show Privado", item: "Show Privado (Fim)", showBoundary: "end" },
+        ],
+      },
+    },
+  };
+  const report = buildReportData(
+    { modelId: "test-model", modelName: "Test", dateKey, totalTokens: 100 },
+    daily,
+  );
+  const live = report.liveSessions[0];
+  const liveShowStats = buildDailyShowStats({ capturedEvents: live.capturedEvents });
+  const period = buildPeriodReportSummary({
+    modelId: "test-model",
+    modelEntries: [{ modelId: "test-model", dateKey, totalTokens: 100 }],
+    start: dateKey,
+    end: dateKey,
+    dateKeys: [dateKey],
+    dailyByDate: { [dateKey]: daily },
+  });
+
+  assert.equal(report.totalTokens, 137);
+  assert.equal(report.largestTip, null);
+  assert.equal(report.showStats.private.earnings, 50);
+  assert.deepEqual(report.showStats.private.privateShows[0].participants, ["DayNick"]);
+  assert.equal(live.tokens, 42);
+  assert.equal(liveShowStats.private.earnings, 20);
+  assert.deepEqual(liveShowStats.private.privateShows[0].participants, ["LiveNick"]);
+  assert.equal(period.totalPeriodTokens, 137);
+  assert.equal(period.showStats.private.earnings, 50);
+  assert.deepEqual(
+    buildGainTypeRows(report.eventSummaryTotals).map(({ label, value }) => ({ label, value })),
+    [
+      { label: "Show privado", value: 32 },
+      { label: "Chat privado", value: 5 },
+    ],
+  );
+});
+
+test("counts a manually created show and its optional participant", () => {
+  const stats = buildDailyShowStats({
+    capturedEvents: [
+      {
+        id: "manual-exclusive-start",
+        timestamp: 100,
+        type: "Show Exclusivo",
+        item: "Show exclusivo · ganho manual",
+        showBoundary: "start",
+        manualNewShow: true,
+        manualEntry: true,
+        manualAmount: 35,
+        price: 35,
+        tokens: 35,
+        user: "ExclusiveNick",
+      },
+      {
+        id: "manual-exclusive-end",
+        timestamp: 101,
+        type: "Show Exclusivo",
+        item: "Show exclusivo · fim manual",
+        showBoundary: "end",
+      },
+    ],
+  });
+
+  assert.equal(stats.exclusive.count, 1);
+  assert.equal(stats.exclusive.earnings, 35);
+  assert.equal(stats.exclusive.exclusiveShows[0].startedAt, null);
+  assert.equal(stats.exclusive.exclusiveShows[0].endedAt, null);
+  assert.deepEqual(stats.exclusive.exclusiveShows[0].participants, ["ExclusiveNick"]);
+  assert.deepEqual(
+    stats.exclusive.exclusiveShows[0].participantEntries,
+    [{ name: "ExclusiveNick", count: 1 }],
+  );
+});
+
+test("aggregates show counts and participant details for period reports", () => {
+  const dateKey = "2026-11-25";
+  const summary = buildPeriodReportSummary({
+    modelId: "test-model",
+    start: dateKey,
+    end: dateKey,
+    dateKeys: [dateKey],
+    dailyByDate: {
+      [dateKey]: {
+        capturedEvents: [
+          { id: "ticket-start", timestamp: 100, type: "Ticket show", item: "Ticket show (Início)", showBoundary: "start", ticketPrice: 30 },
+          { id: "ticket-user", timestamp: 110, type: "Participante de show", item: "TicketUser", user: "TicketUser", showParticipantType: "ticket" },
+          { id: "ticket-sale", timestamp: 120, type: "Ingresso Ticket", item: "Compra de Ingresso", price: 30 },
+          { id: "ticket-end", timestamp: 150, type: "Ticket show", item: "Ticket show (Fim)", showBoundary: "end" },
+          { id: "group-start", timestamp: 200, type: "Show em Grupo", item: "Show em Grupo (Início)", showBoundary: "start", tokens: 15 },
+          { id: "group-user", timestamp: 210, type: "Participante de show", item: "GroupUser", user: "GroupUser", showParticipantType: "group" },
+          { id: "group-end", timestamp: 250, type: "Show em Grupo", item: "Show em Grupo (Fim)", showBoundary: "end" },
+          { id: "private-start", timestamp: 300, type: "Show Privado", item: "Show Privado (Início)", showBoundary: "start", tokens: 20 },
+          { id: "private-end", timestamp: 350, type: "Show Privado", item: "Show Privado (Fim)", showBoundary: "end" },
+          { id: "exclusive-start", timestamp: 400, type: "Show Exclusivo", item: "Show Exclusivo (Início)", showBoundary: "start", tokens: 25 },
+          { id: "exclusive-end", timestamp: 450, type: "Show Exclusivo", item: "Show Exclusivo (Fim)", showBoundary: "end" },
+        ],
+      },
+    },
+  });
+
+  assert.deepEqual(summary.showCounts, {
+    ticket: 1,
+    private: 1,
+    exclusive: 1,
+    group: 1,
+  });
+  assert.equal(summary.showStats.ticket.earnings, 30);
+  assert.equal(summary.showStats.ticket.ticketsSold, 1);
+  assert.equal(summary.showStats.ticket.ticketShows[0].dateKey, dateKey);
+  assert.deepEqual(summary.showStats.ticket.ticketShows[0].participants, ["TicketUser"]);
+  assert.deepEqual(
+    summary.showStats.ticket.ticketShows[0].participantEntries,
+    [{ name: "TicketUser", count: 1 }],
+  );
+  assert.equal(summary.showStats.group.earnings, 15);
+  assert.equal(summary.showStats.group.groupShows[0].dateKey, dateKey);
+  assert.deepEqual(summary.showStats.group.groupShows[0].participants, ["GroupUser"]);
+  assert.deepEqual(
+    summary.showStats.group.groupShows[0].participantEntries,
+    [{ name: "GroupUser", count: 1 }],
+  );
+  assert.deepEqual(summary.showStats.private.privateShows, [{
+    startedAt: 300,
+    endedAt: 350,
+    earnings: 20,
+    dateKey,
+  }]);
+  assert.deepEqual(summary.showStats.exclusive.exclusiveShows, [{
+    startedAt: 400,
+    endedAt: 450,
+    earnings: 25,
+    dateKey,
+  }]);
+});
 
 test("distinguishes saved audience counts from missing or empty data", () => {
   assert.equal(hasAudienceStats({ newUsers: 0, returningUsers: 0 }), true);
@@ -162,6 +569,12 @@ test("merges daily buckets from same-name model IDs without dropping live sessio
       kingChatTotals: {
         donor: { name: "User One", tokens: 10, tips: 2 },
       },
+      manualEarnings: [{
+        id: "manual-model-one",
+        type: "Chat privado",
+        manualEntry: true,
+        manualAmount: 5,
+      }],
     },
     {
       date: "2026-11-24",
@@ -195,6 +608,12 @@ test("merges daily buckets from same-name model IDs without dropping live sessio
       kingChatTotals: {
         donor: { name: "User One", tokens: 20, tips: 3 },
       },
+      manualEarnings: [{
+        id: "manual-model-two",
+        type: "Chat privado",
+        manualEntry: true,
+        manualAmount: 7,
+      }],
     },
   ]);
   const report = buildReportData(
@@ -202,7 +621,8 @@ test("merges daily buckets from same-name model IDs without dropping live sessio
     merged,
   );
 
-  assert.equal(report.totalTokens, 1617);
+  assert.equal(report.totalTokens, 1629);
+  assert.equal(report.eventSummaryTotals["__manual__:Chat privado"].tokens, 12);
   assert.equal(report.peakViewers, 177);
   assert.equal(report.liveSessions.length, 3);
   assert.deepEqual(
@@ -211,6 +631,27 @@ test("merges daily buckets from same-name model IDs without dropping live sessio
   );
   assert.equal(report.netSeconds, 4463);
   assert.deepEqual(report.donorRows, [{ name: "User One", tokens: 30, tips: 5 }]);
+});
+
+test("daily muted-user deletion markers are retained alongside aggregate source records", () => {
+  const deletedRecord = { username: "Muted", timestamp: 100 };
+  const deleted = mergeDailyReportBuckets([{
+    mutedUsers: [deletedRecord],
+    mutedUserDeletedIds: ["muted|100"],
+  }]);
+  assert.deepEqual(deleted.mutedUsers, [deletedRecord]);
+  assert.deepEqual(deleted.mutedUserDeletedIds, ["muted|100"]);
+
+  const reMuted = mergeDailyReportBuckets([
+    {
+      mutedUsers: [deletedRecord],
+      mutedUserDeletedIds: ["muted|100"],
+    },
+    {
+      mutedUsers: [{ username: "Muted", timestamp: 200 }],
+    },
+  ]);
+  assert.deepEqual(reMuted.mutedUsers, [deletedRecord]);
 });
 
 test("requires complete and consistent counts for audience conversion", () => {
@@ -433,6 +874,19 @@ test("uses one-minute audience buckets automatically for short timelines", () =>
       { label: "10:01", viewers: 3 },
     ],
   );
+});
+
+test("excludes audience samples from minutes with no live time", () => {
+  const points = buildAudienceChartPoints([
+    { minute: "15:35", viewersSum: 20, viewerSamples: 2, netSeconds: 60 },
+    { minute: "15:36", viewersSum: 80, viewerSamples: 2, netSeconds: 0 },
+    { minute: "15:37", viewersSum: 24, viewerSamples: 2, netSeconds: 60 },
+  ]);
+
+  assert.deepEqual(points.map(({ label, viewers }) => ({ label, viewers })), [
+    { label: "15:35", viewers: 10 },
+    { label: "15:37", viewers: 12 },
+  ]);
 });
 
 test("keeps precise audience sums when grouping pre-aggregated minute rows", () => {
@@ -978,4 +1432,97 @@ test("does not count empty audience snapshots as recorded audience data", () => 
   assert.equal(summary.audienceDays, 0);
   assert.deepEqual(summary.newUserBars, []);
   assert.deepEqual(summary.returningUserBars, []);
+});
+
+test("keeps period moderation totals and hourly activity after a detail is removed", () => {
+  const dateKey = "2026-01-05";
+  const summary = buildPeriodReportSummary({
+    modelId: "model",
+    start: dateKey,
+    end: dateKey,
+    dateKeys: [dateKey],
+    dailyByDate: {
+      [dateKey]: {
+        moderationStats: { attempts: 2, successes: 1, failures: 1, pending: 0 },
+        moderationHourlyTotals: { 12: 2 },
+        moderationLogs: [{
+          id: "visible-log",
+          timestamp: Date.parse("2026-01-05T12:30:00-03:00"),
+          user: "Visible",
+          status: "SUCESSO",
+        }],
+      },
+    },
+  });
+
+  assert.equal(summary.moderationLogCount, 2);
+  assert.equal(summary.moderationSuccessCount, 1);
+  assert.equal(summary.moderationFailureCount, 1);
+  assert.equal(summary.moderationLogs.length, 1);
+  assert.equal(summary.moderationLogs[0].dateKey, dateKey);
+  assert.equal(summary.activityTimeline[12].moderation, 2);
+});
+
+test("keeps muted-user messages separated by day in period reports", () => {
+  const firstDay = "2026-01-05";
+  const secondDay = "2026-01-06";
+  const summary = buildPeriodReportSummary({
+    modelId: "model",
+    start: firstDay,
+    end: secondDay,
+    dateKeys: [firstDay, secondDay],
+    dailyByDate: {
+      [firstDay]: {
+        mutedUsers: [{
+          username: "Muted",
+          mutedBy: "Moderator",
+          lastMessage: "first day's message",
+          timestamp: Date.parse("2026-01-05T12:00:00-03:00"),
+        }],
+      },
+      [secondDay]: {
+        mutedUsers: [{
+          username: "Muted",
+          mutedBy: "Moderator",
+          lastMessage: "second day's message",
+          timestamp: Date.parse("2026-01-06T12:00:00-03:00"),
+        }],
+      },
+    },
+  });
+
+  assert.equal(summary.mutedRows[0].days, 2);
+  assert.equal(summary.mutedRows[0].dateKey, secondDay);
+  assert.equal(summary.mutedRows[0].lastMessage, "second day's message");
+  assert.deepEqual(summary.mutedLogRows.map((entry) => entry.dateKey), [secondDay, firstDay]);
+  assert.deepEqual(
+    summary.mutedLogRows.map((entry) => entry.lastMessage),
+    ["second day's message", "first day's message"],
+  );
+});
+
+test("hides deleted muted-user details but preserves daily aggregate counts", () => {
+  const dateKey = "2026-01-05";
+  const timestamp = Date.parse("2026-01-05T12:00:00-03:00");
+  const summary = buildPeriodReportSummary({
+    modelId: "model",
+    start: dateKey,
+    end: dateKey,
+    dateKeys: [dateKey],
+    dailyByDate: {
+      [dateKey]: {
+        mutedUsers: [{
+          username: "Muted",
+          mutedBy: "Moderator",
+          lastMessage: "removed detail",
+          timestamp,
+        }],
+        mutedUserDeletedIds: [`muted|${timestamp}`],
+      },
+    },
+  });
+
+  assert.deepEqual(summary.mutedRows, []);
+  assert.deepEqual(summary.mutedLogRows, []);
+  assert.equal(summary.mutedBars[0].value, 1);
 });

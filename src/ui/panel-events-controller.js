@@ -1,5 +1,6 @@
 import { clean } from "../utils/helpers.js";
 import { buildEventSummaryHtml } from "./dashboard/event-summary.js";
+import { aggregateDonorEvents } from "./donor-utils.js";
 
 function getSummaryKeyForEvent(item, type, menuOption = "", rouletteOutcome = "") {
   const label = String(menuOption || item || "—").trim();
@@ -165,6 +166,7 @@ export function filterEvents(events, filterMode) {
     const typeLower = String(event.type || "").toLowerCase();
     const itemLower = String(event.item || "").toLowerCase();
     const eventAmount = Number(event.price ?? event.tokens) || 0;
+    if (typeLower === "participante de show") return false;
     if (typeLower === "ticket show" && eventAmount <= 0) return false;
     if (filterMode === "tips") {
       return typeLower.includes("gorjeta") || typeLower.includes("tip") || itemLower.includes("gorjeta");
@@ -251,7 +253,11 @@ export function createPanelEventsController({
         const typeHtml = TRANSLATABLE_EVENT_LABELS.has(String(event.type || ""))
           ? `<span data-scm-i18n>${clean(event.type)}</span>`
           : clean(event.type);
-        return `<tr><td>${itemHtml}</td><td><strong style="color:#00e5ff;">${clean(event.price)} tk</strong></td><td>${typeHtml}</td></tr>`;
+        const eventAmount = Number(event.price ?? event.tokens) || 0;
+        const amountHtml = eventAmount > 0
+          ? `<strong style="color:#00e5ff;">${clean(event.price ?? event.tokens)} tk</strong>`
+          : "";
+        return `<tr><td>${itemHtml}</td><td>${amountHtml}</td><td>${typeHtml}</td></tr>`;
       })
       .join("");
   }
@@ -320,22 +326,16 @@ export function createPanelEventsController({
 
     const state = getState();
     const scopeData = getScopeData();
-    const donorsMap = new Map();
-    scopeData.events.forEach((event) => {
-      const name = String(event?.user || "").trim();
-      const tokens = Number(event?.price ?? event?.tokens) || 0;
-      if (!name || name === "—" || tokens <= 0) return;
-      const previous = donorsMap.get(name) || { name, tokens: 0, tips: 0, isListed: false };
-      previous.tokens += tokens;
-      previous.tips += 1;
+    const usersWithTokens = aggregateDonorEvents(scopeData.events).map((donor) => {
       const liveUser = Object.values(state.users || {}).find(
-        (user) => String(user?.name || "").toLowerCase() === name.toLowerCase()
+        (user) => String(user?.name || "").trim().toLowerCase() === donor.name.toLowerCase(),
       );
-      previous.isListed = Boolean(liveUser?.isListed);
-      donorsMap.set(name, previous);
+      return {
+        ...donor,
+        name: liveUser?.name || donor.name,
+        isListed: Boolean(liveUser?.isListed),
+      };
     });
-    const usersWithTokens = Array.from(donorsMap.values())
-      .sort((a, b) => b.tokens - a.tokens);
 
     if (usersWithTokens.length === 0) {
       container.innerHTML = `
@@ -374,7 +374,7 @@ export function createPanelEventsController({
       })
       .join("");
 
-    const subBadgeText = `${scope === "session" ? "Sessão" : "Hoje"}: ${displayTotal} tk • Méd ${avgPerTip}/gorjeta`;
+    const subBadgeText = `${scope === "session" ? "Live" : "Hoje"}: ${displayTotal} tk • Méd ${avgPerTip}/gorjeta`;
 
     const newContent = `
       <div style="font-weight: 600; color: #00e5ff; margin-bottom: 8px; border-bottom: 1px solid #272952; padding-bottom: 6px; display: flex; justify-content: space-between; align-items: center; gap: 6px; font-size: 12px;">

@@ -1,17 +1,20 @@
-SC MONITOR - VERSION 5.0
+SC MONITOR - VERSIÓN 5.0.3
 ========================================================================
 
-       Local audience, chat, tips, goals, and moderation dashboard
+       Panel local de audiencia, chat, propinas, metas y moderación
 
-                              for Stripchat
+                             para Stripchat
 ========================================================================
 
 SC Monitor es una extensión para navegadores Chromium que supervisa en
 tiempo real la actividad de las salas de Stripchat. Los datos se procesan y
-se guardan localmente en el navegador. La versión 5.0 mejora la estabilidad
-de los datos durante transmisiones largas y amplía el análisis con mapas de
-calor, eficiencia de audiencia, interacción por liga y una cronología
-combinada de metas y shows.
+se guardan localmente en el navegador. La versión 5.0.3 mejora la detección
+del estado sin conexión y de la actividad del chat para cerrar las sesiones
+desconectadas tras dos minutos sin mensajes reales nuevos, sin que los avisos
+automáticos o los cambios en mensajes antiguos reinicien la espera. Mantiene
+las mejoras de la versión 5.0: estabilidad de los datos durante transmisiones
+largas y análisis con mapas de calor, eficiencia de audiencia, interacción por
+liga y una cronología de metas y shows.
 
 
 ------------------------------------------------------------------------
@@ -37,6 +40,10 @@ COMPARACIONES POR DÍA DE LA SEMANA Y TRANSPARENCIA DE LAS MÉTRICAS
 
    - El menú y la ruleta se leen a partir de los eventos y mensajes mostrados
      en el chat. El monitoreo no lee parámetros de iframe.
+
+   - La parada automática requiere al menos dos minutos sin conexión y sin
+     mensajes reales nuevos. Los avisos automáticos y los cambios en mensajes
+     antiguos no reinician el temporizador.
 
 
 1. HISTORIAL ACUMULATIVO DE METAS DE LA SALA
@@ -150,14 +157,29 @@ COMPARACIONES POR DÍA DE LA SEMANA Y TRANSPARENCIA DE LAS MÉTRICAS
      (.user-muted-message), registrando al autor, al moderador y el mensaje
      capturado más reciente.
 
+   - La pestaña Moderación muestra los mensajes moderados del día actual. El
+     Informe conserva el historial de otros días, incluidos los mensajes de
+     usuarios silenciados. En los informes por período se pueden eliminar los
+     detalles de un usuario silenciado solo del período seleccionado, sin
+     cambiar los totales agregados.
+
 
 8. CONTROL DEL TIEMPO E INTERFAZ FLOTANTE
 
    - Hay cronómetros independientes para el tiempo total transcurrido y el
      tiempo neto activo.
 
-   - En el modo Monitorear sala, el aviso de sala offline espera 2 minutos y
-     los mensajes nuevos prolongan la espera antes de terminar el monitoreo.
+   - En el modo Monitorear sala, la recolección comienza cuando SC Monitor
+     detecta la transmisión en vivo o el estado «En espera». Durante la espera
+     se cuenta el tiempo total, pero no el tiempo neto. Cuando la modelo queda
+     desconectada, el tiempo total se pausa inmediatamente, aunque la
+     recolección continúa durante el período de tolerancia para decidir si
+     volvió la misma transmisión: dos minutos desde la detección local y
+     también desde el último mensaje real; prevalece el plazo que termine más
+     tarde. No se usa el tiempo relativo del sitio. Cada mensaje real nuevo
+     reinicia el plazo de inactividad; los avisos automáticos y los cambios en
+     mensajes antiguos no. Si vence el plazo, la transmisión termina; si la
+     modelo vuelve después, comienza una nueva.
 
    - El panel se puede arrastrar desde el encabezado o la barra inferior
      interna, que muestra la fecha y el logo. Se puede ajustar el tamaño desde
@@ -173,11 +195,31 @@ COMPARACIONES POR DÍA DE LA SEMANA Y TRANSPARENCIA DE LAS MÉTRICAS
    - Exporta informes completos de usuarios, visitas, tiempo y tokens en
      formato CSV.
 
-   - Hay informes detallados en una página dedicada de la extensión, que se
-     abre desde el popup o el panel. Los informes por período también muestran
-     la evolución diaria de usuarios nuevos y recurrentes cuando se guardaron
-     esos datos. El rey actual de cada día también se registra y aparece en
-     los informes diarios y los resúmenes por período.
+   - La Página de Informes es la página dedicada de la extensión. Se abre desde
+     el popup o con el botón "↗ Página del informe" de la pestaña Informe del
+     panel. Incluye
+     informes detallados, filtros de modelo y fecha, exportación CSV y
+     herramientas para importar/exportar copias de seguridad y borrar datos.
+     Los informes por período también muestran la evolución diaria de usuarios
+     nuevos y recurrentes cuando se guardaron esos datos. El rey actual de cada
+     día también se registra y aparece en los informes diarios y los resúmenes
+     por período. El informe diario cuenta los shows por tipo, estima sus
+     ganancias en tokens e indica las horas de inicio y fin. Para cada Ticket
+     show, detalla las entradas vendidas, el precio por entrada y las ganancias
+     estimadas cuando se capturaron esos datos. También permite abrir la lista
+     de participantes de cada Ticket show o Show en Grupo. En los informes por
+     período, los shows se organizan en carpetas desplegables por tipo y fecha;
+     las listas de participantes registradas siguen disponibles. Según el
+     momento en que se inicie la extensión, es posible que no se capturen
+     algunos anuncios, compras o propinas, por lo que los valores pueden variar.
+     Cada usuario aparece una sola vez con la cantidad de veces que entró.
+     En los informes de Día y Live también se pueden registrar manualmente
+     ganancias de chat privado, Show Privado y Show Exclusivo, con importe y
+     nombre de usuario opcional. Para shows privados y exclusivos, selecciona
+     un show existente o crea uno nuevo; los importes se incluyen en los
+     totales del día, la live y el período. Cada ganancia registrada se puede
+     eliminar individualmente; los valores aún no enviados se conservan al
+     actualizar el informe.
 
    - Los intervalos de los gráficos se seleccionan automáticamente según la
      duración registrada:
@@ -191,17 +233,20 @@ COMPARACIONES POR DÍA DE LA SEMANA Y TRANSPARENCIA DE LAS MÉTRICAS
 
    CÓMO LEER LOS GRÁFICOS DE LOS INFORMES
 
-   - La página ofrece tres vistas: Día, Sesión y Período. Elige el modelo/sala
-     y los datos disponibles. En el informe por período, define las fechas y
-     agrupa los resultados por día, semana o mes. También puedes comparar dos
-     períodos.
+   - En la Página de Informes hay tres vistas: Día, Live y Período. Elige el
+     modelo/sala y los datos disponibles. En el informe por período, define las
+     fechas y agrupa los resultados por día, semana o mes. También puedes
+     comparar dos períodos.
 
-   - En los informes de Día y Sesión, el gráfico combinado muestra los tokens
-     por intervalo junto con la evolución de la audiencia. El informe diario
-     marca los shows registrados. Los gráficos de flujo detallan tokens y
-     usuarios listados; elige el tamaño de los bloques o usa Automático para
-     ajustarlo a la duración registrada. Los tokens sin hora se muestran aparte
-     y no se distribuyen artificialmente entre los bloques.
+   - En los informes de Día y Live, el gráfico combinado muestra los tokens
+     por intervalo junto con la evolución de la audiencia y marca los tipos de
+     show registrados. La sección Shows resume las cantidades y las ganancias;
+     en los informes diarios, de Live y por período también permite consultar
+     los participantes registrados en cada Ticket show o Show en Grupo. Los
+     gráficos de flujo detallan tokens y usuarios listados;
+     elige el tamaño de los bloques o usa Automático para ajustarlo a la duración
+     registrada. Los tokens sin hora se muestran aparte y no se distribuyen
+     artificialmente entre los bloques.
 
    - Los gráficos e indicadores de audiencia del informe diario muestran la
      retención, los picos/promedios de usuarios y la distribución por liga.
@@ -210,7 +255,8 @@ COMPARACIONES POR DÍA DE LA SEMANA Y TRANSPARENCIA DE LAS MÉTRICAS
      clasificaciones muestran las mayores propinas individuales, las opciones
      del menú y los resultados registrados de la ruleta. Cuando hay datos, las
      tablas también muestran lives, donantes, usuarios sospechosos y usuarios
-     silenciados.
+     silenciados. El resumen diario también cuenta los shows por tipo: ticket,
+     privado, exclusivo y grupal.
 
    - El gráfico combinado del informe por Sesión muestra la audiencia y las
      ganancias de la live en los intervalos seleccionados. También incluye el
@@ -257,6 +303,11 @@ COMPARACIONES POR DÍA DE LA SEMANA Y TRANSPARENCIA DE LAS MÉTRICAS
      individual. La acción pide confirmación, elimina el registro del
      historial y no recalcula las métricas agregadas. Antes de borrar, hay
      que pausar el monitoreo de ese modelo.
+
+   - Los informes diarios y por período muestran la conversión de usuarios
+     nuevos y recurrentes en donantes cuando hay datos completos. En los
+     informes por período, los usuarios recurrentes se cuentan por día, así
+     que una misma persona puede aparecer en varios días.
 
    - Los informes diarios y por período muestran la conversión de usuarios
      nuevos y recurrentes en donantes cuando hay datos completos. En los
@@ -318,9 +369,9 @@ PESTAÑAS
      como completada.
 
    - 🛡️ Moderación: permite registrar palabras y frases prohibidas y consultar
-     mensajes moderados y usuarios silenciados. La extensión puede intentar
-     silenciar mensajes identificados; consulta el historial para ver el
-     resultado.
+     los mensajes moderados del día actual y los usuarios silenciados. Los
+     informes conservan el historial de otros días y los mensajes asociados.
+     Se puede eliminar un detalle sin cambiar los totales agregados.
 
    - 🗂️ Historial: muestra las salas/modelos y los datos diarios guardados,
      con acciones para esos registros. También permite exportar e importar
@@ -329,8 +380,9 @@ PESTAÑAS
 
    - 📑 Informe: compara datos de la sesión, del día o de un período.
      Selecciona la sala y las fechas para consultar los gráficos y las
-     métricas; usa "Página" para abrir los informes detallados. "Copiar
-     resumen" y "CSV" exportan los datos del informe seleccionado.
+     métricas; el botón "↗ Página del informe" abre la Página de Informes con
+     los informes detallados. "Copiar resumen" y "CSV" exportan los datos del informe
+     seleccionado.
 
 
 CONTROLES DEL PANEL
@@ -349,12 +401,21 @@ CONTROLES DEL PANEL
      inicia el monitoreo por sí sola.
 
    - Monitorear sala (OFF ⇄ ON): sigue automáticamente la sala abierta.
-     Inicia la recolección cuando detecta una transmisión en vivo y termina
-     después de 2 minutos offline sin mensajes nuevos en el chat. Los
-     mensajes prolongan la espera; volver al directo cancela la parada. Al
-     navegar a otra sala, termina la recolección de la sala monitoreada.
-     Desactivar esta opción deshabilita la automatización, pero no pausa una
-     sesión que ya esté monitoreando; usa "Pausar monitor".
+     Inicia la recolección cuando detecta una transmisión en vivo o el estado
+     «En espera». Durante la espera cuenta el tiempo total, pero no el neto.
+     Cuando la modelo queda desconectada, el tiempo total se pausa en cuanto
+     SC Monitor detecta el cambio; la recolección continúa durante el período
+     de tolerancia para decidir si es la misma transmisión: dos minutos desde
+     la detección local y también desde el último mensaje real, prevaleciendo
+     el plazo que termine más tarde. No se usa el tiempo relativo mostrado por
+     el sitio. Cada mensaje real nuevo reinicia el plazo de inactividad, pero
+     los avisos automáticos y los cambios en mensajes antiguos no. Si la modelo
+     vuelve antes de que termine el período, continúa la misma transmisión; si
+     vuelve después, comienza otra. Actualizar la página o salir y volver a la
+     sala sigue iniciando una nueva transmisión. Al navegar a otra sala,
+     termina la recolección de la sala monitoreada. Desactivar esta opción
+     deshabilita la automatización, pero no pausa un monitoreo que ya esté en
+     curso; usa "Pausar monitor".
 
    - Fijar: mantiene el panel abierto al hacer clic fuera de él. Para cerrarlo,
      usa "Cerrar".
@@ -375,8 +436,8 @@ CONTROLES DEL PANEL
 ```text
 site_monitor/
 
-├── manifest.json            # Configuración de la extensión Chromium Manifest V3 (v5.0)
-├── README.txt               # Documentación oficial del proyecto
+├── manifest.json            # Configuración de la extensión Chromium Manifest V3 (v5.0.3)
+├── README.md                # Documentación principal del proyecto
 ├── README.en.md             # Documentación en inglés
 ├── README.es.md             # Documentación en español
 ├── reports.html             # Página dedicada a los informes
@@ -394,8 +455,10 @@ site_monitor/
 │   │   ├── configuration.js # Valores iniciales y limpieza de opciones temporales
 │   │   ├── backup.js        # Validación y formato de copias JSON
 │   │   ├── room-king.js     # Concilia el rey actual con valores del sitio y el chat
+│   │   ├── chat-activity.js # Detección de mensajes reales nuevos en el chat
+│   │   ├── offline-monitor.js # Detección del estado sin conexión y parada automática
 │   │   ├── storage.js       # Interfaz de almacenamiento mediante el service worker
-│   │   └── ui-refresh.js    # Actualizaciones de interfaz separadas de los módulos de dominio
+│   │   └── ui-refresh.js   # Actualizaciones de interfaz separadas de los módulos de dominio
 │   ├── modules/
 │   │   ├── auto-collector.js # Alternancia de pestañas y ciclo de recolección automática
 │   │   ├── events.js        # Lectura de mensajes, propinas, plugins y shows
@@ -407,6 +470,10 @@ site_monitor/
 │   │   ├── panel-report-controller.js # Estado e integración de la pestaña Informe
 │   │   ├── panel-report-workspace.js # Carga y renderiza informes en el panel
 │   │   ├── panel-report-controls.js # Controles y selectores de la pestaña Informe
+│   │   ├── report-view-state.js # Estado de filtros y vista de informes
+│   │   ├── donor-utils.js    # Utilidades para identificar donantes
+│   │   ├── manual-entry-draft.js # Borradores de ganancias manuales
+│   │   ├── manual-entry-storage.js # Almacenamiento de ganancias manuales
 │   │   ├── panel-template.js # Marcado HTML del panel
 │   │   ├── panel-resize.js  # Cálculo del cambio de tamaño desde las cuatro esquinas
 │   │   ├── open-reports.js  # Abre la página dedicada de informes
@@ -430,7 +497,8 @@ site_monitor/
 │   │   └── export/
 │   │       └── csv-export.js # Generación y descarga de informes CSV
 │   └── utils/
-│       └── helpers.js       # Utilidades (sanitización de texto y formateadores)
+│       ├── helpers.js       # Utilidades (sanitización de texto y formateadores)
+│       └── i18n.js          # Traducciones de la interfaz
 └── tests/                   # Pruebas de regresión con el runner nativo de Node.js
 ```
 
@@ -442,8 +510,8 @@ PRUEBAS DE REGRESIÓN
    - Las pruebas usan el runner nativo de Node.js y no agregan dependencias
      de terceros.
    - La suite cubre almacenamiento y copias de seguridad, persistencia,
-     informes, captura de eventos, historial del rey y cambio de tamaño del
-     panel.
+     informes, captura de eventos, actividad del chat, monitoreo sin conexión,
+     historial del rey y cambio de tamaño del panel.
 
 
 ------------------------------------------------------------------------
@@ -506,6 +574,8 @@ Permitir el uso en ventanas de incógnito (opcional):
    - Desplázate hacia abajo hasta "Permitir en modo incógnito".
    - Activa la opción para permitir la extensión en páginas de Stripchat
      abiertas en una ventana de incógnito.
+   - Los informes se abren en una ventana normal para usar los datos
+     compartidos con el resto de la extensión.
 
 
 ------------------------------------------------------------------------
@@ -527,4 +597,3 @@ Permitir el uso en ventanas de incógnito (opcional):
      a otros servidores.
 
 ========================================================================
-

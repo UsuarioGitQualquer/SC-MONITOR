@@ -19,6 +19,9 @@ function normalizeMinuteBuckets(rawBuckets) {
             : Math.round(Number(minute.avgViewers) || 0),
         listedUsersSum: Number(minute.listedUsersSum) || 0,
         listedUsersSamples: Number(minute.listedUsersSamples) || 0,
+        tokensUsersSum: Number(minute.tokensUsersSum) || 0,
+        tokensUsersSamples: Number(minute.tokensUsersSamples) || 0,
+        tokensUsersPeak: Number(minute.tokensUsersPeak) || 0,
         unassignedTokens: Number(minute.unassignedTokens) || 0,
         viewerSamples: Number(minute.viewerSamples) || 0,
         leagueSamples: Number(minute.leagueSamples) || 0,
@@ -48,6 +51,9 @@ function normalizeMinuteBuckets(rawBuckets) {
             : Math.round(Number(minute?.avgViewers) || 0),
         listedUsersSum: Number(minute?.listedUsersSum) || 0,
         listedUsersSamples: Number(minute?.listedUsersSamples) || 0,
+        tokensUsersSum: Number(minute?.tokensUsersSum) || 0,
+        tokensUsersSamples: Number(minute?.tokensUsersSamples) || 0,
+        tokensUsersPeak: Number(minute?.tokensUsersPeak) || 0,
         unassignedTokens: Number(minute?.unassignedTokens) || 0,
         viewerSamples: Number(minute?.viewerSamples) || 0,
         leagueSamples: Number(minute?.leagueSamples) || 0,
@@ -119,6 +125,9 @@ function buildTimeBucketBars(minuteRows, stepMinutes = 60, startMinStr = null, e
       viewerSamples: 0,
       listedUsersSum: 0,
       listedUsersSamples: 0,
+      tokensUsersSum: 0,
+      tokensUsersSamples: 0,
+      tokensUsersPeak: 0,
       unassignedTokens: 0,
     };
     previous.value += Number(minute.tokens) || 0;
@@ -133,6 +142,12 @@ function buildTimeBucketBars(minuteRows, stepMinutes = 60, startMinStr = null, e
     }
     previous.listedUsersSum += Number(minute.listedUsersSum) || 0;
     previous.listedUsersSamples += Number(minute.listedUsersSamples) || 0;
+    previous.tokensUsersSum += Number(minute.tokensUsersSum) || 0;
+    previous.tokensUsersSamples += Number(minute.tokensUsersSamples) || 0;
+    previous.tokensUsersPeak = Math.max(
+      previous.tokensUsersPeak,
+      Number(minute.tokensUsersPeak) || 0,
+    );
     previous.unassignedTokens += Number(minute.unassignedTokens) || 0;
     bucketMap.set(slotStart, previous);
   });
@@ -157,6 +172,9 @@ function buildTimeBucketBars(minuteRows, stepMinutes = 60, startMinStr = null, e
       viewerSamples: 0,
       listedUsersSum: 0,
       listedUsersSamples: 0,
+      tokensUsersSum: 0,
+      tokensUsersSamples: 0,
+      tokensUsersPeak: 0,
       unassignedTokens: 0,
     };
     const startLabel = formatSlot(slot);
@@ -168,6 +186,12 @@ function buildTimeBucketBars(minuteRows, stepMinutes = 60, startMinStr = null, e
     const avgListedUsers = data.listedUsersSamples > 0
       ? Math.round(data.listedUsersSum / data.listedUsersSamples)
       : 0;
+    const avgTokensUsers = data.tokensUsersSamples > 0
+      ? Math.round(data.tokensUsersSum / data.tokensUsersSamples)
+      : 0;
+    const tokensUsersNote = data.tokensUsersSamples > 0
+      ? ` • média ${avgTokensUsers} usuários com tokens`
+      : "";
 
     result.push({
       label: shortLabel,
@@ -175,7 +199,10 @@ function buildTimeBucketBars(minuteRows, stepMinutes = 60, startMinStr = null, e
       avgViewers,
       avgListedUsers,
       listedUsersSamples: data.listedUsersSamples,
-      tooltip: `${startLabel} - ${endLabel} (${step === 60 ? "1h" : `${step}m`}): ${Math.round(data.value)} tk • Média ${avgViewers} viewers • ${avgListedUsers} usuários listados${data.unassignedTokens > 0 ? ` • ${Math.round(data.unassignedTokens)} tk recuperados do total diário, sem minuto registrado` : ""}`,
+      avgTokensUsers,
+      tokensUsersSamples: data.tokensUsersSamples,
+      tokensUsersPeak: data.tokensUsersPeak,
+      tooltip: `${startLabel} - ${endLabel} (${step === 60 ? "1h" : `${step}m`}): ${Math.round(data.value)} tk • Média ${avgViewers} viewers • ${avgListedUsers} usuários listados${tokensUsersNote}${data.unassignedTokens > 0 ? ` • ${Math.round(data.unassignedTokens)} tk recuperados do total diário, sem minuto registrado` : ""}`,
     });
   };
 

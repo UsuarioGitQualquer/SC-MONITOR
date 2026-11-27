@@ -2,9 +2,25 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildEventSummaryMap,
+  createPanelEventsController,
   filterEvents,
   getConsolidatedEventScopeData,
 } from "../src/ui/panel-events-controller.js";
+import { aggregateDonorEvents } from "../src/ui/donor-utils.js";
+
+test("aggregates donor events case-insensitively while preserving the first nick spelling", () => {
+  assert.deepEqual(
+    aggregateDonorEvents([
+      { user: "UsuarioDoador1", price: 20 },
+      { user: "usuariodoador1", price: 30 },
+      { user: "OutroUsuario", price: 10 },
+    ]),
+    [
+      { name: "UsuarioDoador1", tokens: 50, tips: 2 },
+      { name: "OutroUsuario", tokens: 10, tips: 1 },
+    ],
+  );
+});
 
 test("preserves named menu options in the event summary", () => {
   assert.deepEqual(
@@ -105,6 +121,7 @@ test("filters event rows by tips, menus, and goals while excluding null entries"
     { type: "Objetivo Épico", item: "Goal" },
     { type: "Show Privado", item: "Private" },
     { type: "Ingresso Ticket", item: "Ticket" },
+    { type: "Participante de show", item: "ShowUser" },
     { type: "Ticket show", item: "Ticket show (Início)", price: 0 },
     { type: "Show em Grupo", item: "Show em Grupo (Fim)", showBoundary: "end", price: 0 },
     null,
@@ -114,6 +131,44 @@ test("filters event rows by tips, menus, and goals while excluding null entries"
   assert.deepEqual(filterEvents(events, "menu"), [events[1]]);
   assert.deepEqual(filterEvents(events, "goals"), [events[5], events[6], events[7], events[8]]);
   assert.deepEqual(filterEvents(events, "all"), events.filter(
-    (event) => event && event.type !== "Ticket show" && event.showBoundary !== "end",
+    (event) =>
+      event &&
+      event.type !== "Ticket show" &&
+      event.type !== "Participante de show" &&
+      event.showBoundary !== "end",
   ));
+});
+
+test("omits show participants and zero-token amounts from event rows", () => {
+  const wheel = { innerHTML: "" };
+  const panel = {
+    querySelector: (selector) => selector === "#scm-wheel" ? wheel : null,
+  };
+  const controller = createPanelEventsController({
+    getPanel: () => panel,
+    getState: () => ({
+      dailyBuckets: {
+        "2026-11-26": {
+          capturedEvents: [
+            {
+              type: "Participante de show",
+              item: "GroupUser",
+              user: "GroupUser",
+              price: 0,
+            },
+            { type: "Gorjeta", item: "TipUser", user: "TipUser", price: 8 },
+          ],
+        },
+      },
+    }),
+    localDateKey: () => "2026-11-26",
+    buildGainTypeChart: () => "",
+    buildTopDonorsChart: () => "",
+  });
+
+  controller.renderEventsTable();
+
+  assert.doesNotMatch(wheel.innerHTML, /GroupUser/);
+  assert.match(wheel.innerHTML, /8 tk/);
+  assert.doesNotMatch(wheel.innerHTML, /0 tk/);
 });

@@ -42,7 +42,7 @@ export function buildEventSummaryHtml({
 }) {
   const scopeButtonsHtml = `
     <div style="display:flex; gap:4px; flex-shrink:0;">
-      <button type="button" class="scm-event-scope-btn" data-scope="session" style="background:${scope === "session" ? "linear-gradient(90deg,#00e5ff,#2563eb)" : "#23264d"}; color:${scope === "session" ? "#0f1024" : "#8b92b8"}; border:0; padding:3px 7px; border-radius:99px; font-size:10px; font-weight:bold; cursor:pointer;">Sessão</button>
+      <button type="button" class="scm-event-scope-btn" data-scope="session" style="background:${scope === "session" ? "linear-gradient(90deg,#00e5ff,#2563eb)" : "#23264d"}; color:${scope === "session" ? "#0f1024" : "#8b92b8"}; border:0; padding:3px 7px; border-radius:99px; font-size:10px; font-weight:bold; cursor:pointer;">Live</button>
       <button type="button" class="scm-event-scope-btn" data-scope="day" style="background:${scope === "day" ? "linear-gradient(90deg,#ff2a6d,#ff7b00)" : "#23264d"}; color:${scope === "day" ? "#fff" : "#8b92b8"}; border:0; padding:3px 7px; border-radius:99px; font-size:10px; font-weight:bold; cursor:pointer;">Dia</button>
     </div>
   `;

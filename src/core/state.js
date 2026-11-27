@@ -127,11 +127,30 @@ export function createEmptyDailyBucket(dayKey = localDateKey(), baseTokens = 0, 
     moderationStats: { attempts: 0, successes: 0, failures: 0, pending: 0 },
     moderationPendingById: {},
     mutedUsers: [],
+    mutedUserDeletedIds: [],
     minuteBuckets: {},
     liveSessions: {},
     sessions: {},
     suspectBots: [],
   };
+}
+
+export function trimCapturedEvents(events, maxLength = 500) {
+  if (!Array.isArray(events)) return [];
+  const isShowRecord = (event) =>
+    event?.showBoundary === "start" ||
+    event?.showBoundary === "end" ||
+    event?.showParticipantType === "ticket" ||
+    /ingresso ticket|compra de ingresso/i.test(
+      `${String(event?.type || "")} ${String(event?.item || "")}`,
+    );
+
+  while (events.length > maxLength) {
+    const removableIndex = events.findIndex((event) => !isShowRecord(event));
+    if (removableIndex < 0) break;
+    events.splice(removableIndex, 1);
+  }
+  return events;
 }
 
 export function ensureDailyBucket(dayKey = localDateKey()) {
@@ -198,6 +217,10 @@ export function recordDailyMutedUser(user, dayKey = localDateKey()) {
   const entry = {
     username,
     mutedBy: String(user.mutedBy || ""),
+    lastMessage: String(user.lastMessage || "").trim(),
+    recentMessages: Array.isArray(user.recentMessages)
+      ? user.recentMessages.map((message) => String(message || "").trim()).filter(Boolean).slice(0, 2)
+      : [],
     timestamp,
     _timestamp: timestamp,
   };
@@ -230,10 +253,44 @@ export function recordDailyModerationLog(log) {
       ? "failures"
       : "pending";
   const id = String(log.id || `${timestamp}-${log.user || ""}`);
+  const deletedIds = Array.isArray(bucket.moderationLogDeletedIds)
+    ? bucket.moderationLogDeletedIds
+    : [];
+  bucket.moderationLogDeletedIds = deletedIds;
+  if (!deletedIds.includes(id)) {
+    if (!Array.isArray(bucket.moderationLogs)) bucket.moderationLogs = [];
+    const logEntry = { ...log, id, timestamp, status };
+    const existingIndex = bucket.moderationLogs.findIndex(
+      (entry) => String(entry?.id || "") === id,
+    );
+    if (existingIndex >= 0) {
+      bucket.moderationLogs[existingIndex] = {
+        ...bucket.moderationLogs[existingIndex],
+        ...logEntry,
+      };
+    } else {
+      bucket.moderationLogs.push(logEntry);
+    }
+  } else if (Array.isArray(bucket.moderationLogs)) {
+    bucket.moderationLogs = bucket.moderationLogs.filter(
+      (entry) => String(entry?.id || "") !== id,
+    );
+  }
+
   const previousStatus = bucket.moderationPendingById[id];
   if (previousStatus === status) return { id, status, timestamp };
   if (!previousStatus) {
     bucket.moderationStats.attempts = (Number(bucket.moderationStats.attempts) || 0) + 1;
+    if (!bucket.moderationHourlyTotals || typeof bucket.moderationHourlyTotals !== "object") {
+      bucket.moderationHourlyTotals = {};
+    }
+    const hour = Number(new Intl.DateTimeFormat("en-GB", {
+      timeZone: "America/Sao_Paulo",
+      hour: "2-digit",
+      hourCycle: "h23",
+    }).format(new Date(timestamp)));
+    bucket.moderationHourlyTotals[hour] =
+      (Number(bucket.moderationHourlyTotals[hour]) || 0) + 1;
   } else {
     const previousKey = previousStatus === "SUCESSO"
       ? "successes"
@@ -260,6 +317,7 @@ export function recordDailyModerationLog(log) {
   };
 }
 
+// A monitoring session is represented as a live in the system's reports.
 export function startOrTouchLiveSegment(dayKey = localDateKey(), nowTs = Date.now(), forcedStartStr = null) {
   const bucket = ensureDailyBucket(dayKey);
   if (!bucket.liveSessions || typeof bucket.liveSessions !== "object") {
@@ -351,6 +409,7 @@ export function resetSessionStats(preserveTokensBaseline = true) {
     legend: 0,
   };
   state._showInitialCharged = false;
+  state.currentTicketShowActive = false;
   state.showTokensAccumulated = 0;
   state.viewerSamples = [];
   state.peakViewers = 0;
@@ -510,8 +569,13 @@ export function recordMinuteMetric(
       Math.max(0, Number(tokensUsers)),
     );
   }
-  addLeagueCountsSample(entry, leagueCounts);
-  if (viewers !== null && viewers !== undefined && !Number.isNaN(Number(viewers))) {
+  if (liveActive) addLeagueCountsSample(entry, leagueCounts);
+  if (
+    liveActive &&
+    viewers !== null &&
+    viewers !== undefined &&
+    !Number.isNaN(Number(viewers))
+  ) {
     entry.viewersSum += Number(viewers);
     entry.viewerSamples += 1;
   }
@@ -639,6 +703,8 @@ export const state = {
   kingThreshold: 0,
   kingStateDate: '',
   currentTicketPrice: 0,
+  currentTicketShowStartedAt: 0,
+  currentTicketShowActive: false,
   currentGroupShowRate: 0,
   _showInitialCharged: false,
   currentViewers: null,

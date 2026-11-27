@@ -11,6 +11,7 @@ import {
   recordDailyKingChatTip,
   recordDailyLargestTip,
   recordDailyMutedUser,
+  trimCapturedEvents,
 } from "../core/state.js";
 import { saveToGlobalHistory } from "../core/persistence.js";
 import { autoAddTodo } from "./parsers.js";
@@ -18,6 +19,10 @@ import { checkAndModerateMessage, addMutedUser } from "./moderation.js";
 import { requestUIRefresh, UI_REFRESH } from "../core/ui-refresh.js";
 
 const TICKET_JOIN_CORRELATION_WINDOW_MS = 15000;
+const TICKET_SHOW_JOIN_TEXT_PATTERN =
+  /\bentrou no show por (?:ingressos?|bilhetes?|tickets?)\b|\bjuntou-se ao (?:ticket show|show de ticket)\b|\bse (?:ha )?uni(?:o|d[oa]) (?:al|a un) (?:ticket show|show de ticket)\b|\b(?:recibio|recibiste)\s+(?:el\s+)?ticket\s+(?:de|del|para el)\s+show\b|\b(?:received|got)\s+(?:the\s+)?ticket\s+(?:for|from)\s+(?:the\s+)?show\b|\bjoined (?:the )?ticket show\b/;
+const TICKET_SHOW_JOIN_USERNAME_PATTERN =
+  /^(.+?)\s+(?:juntou-se ao (?:ticket\s+show|show\s+de\s+ticket)|se\s+(?:ha\s+)?(?:unio|unió|unido|unida)\s+(?:al|a un)\s+(?:ticket\s+show|show\s+de\s+ticket)|(?:recibio|recibió|recibiste)\s+(?:el\s+)?ticket\s+(?:de|del|para el)\s+show|(?:received|got)\s+(?:the\s+)?ticket\s+(?:for|from)\s+(?:the\s+)?show|entrou no show por (?:ingressos?|bilhetes?|tickets?)|joined (?:the )?ticket\s+show)\b/i;
 
 function normalizeTicketMessageText(text) {
   return String(text || "")
@@ -40,9 +45,16 @@ export function isTicketPurchaseText(text) {
     .test(normalizeTicketMessageText(text));
 }
 
+export function parseTicketPurchaseUsername(text) {
+  const match = String(text || "").replace(/\s+/g, " ").trim().match(
+    /^(.+?)\s+(?:comprou|compro|compró|compra|bought|purchased|got|received)(?=\s|$)/i,
+  );
+  return match ? cleanUsername(match[1]) : "";
+}
+
 export function parseTicketPriceFromText(text) {
   const purchaseLabel =
-    /\b(?:comprar|buy|purchase)\s+(?:(?:el|la|un|una|a|the)\s+)?(?:tickets?|ingressos?|bilhetes?|entradas?|boletos?)\b/;
+    /\b(?:comprar|buy|purchase|get|obtener|obter)\s+(?:(?:el|la|un|una|a|the|o|os|um|uma)\s+)?(?:tickets?|ingressos?|bilhetes?|entradas?|boletos?)\b/;
   if (!purchaseLabel.test(normalizeTicketMessageText(text))) return 0;
   const match = String(text || "").match(/(\d+)\s*tk\b/i);
   return match ? Number(match[1]) || 0 : 0;
@@ -50,8 +62,7 @@ export function parseTicketPriceFromText(text) {
 
 export function isTicketShowJoinText(text) {
   const normalizedText = normalizeTicketMessageText(text);
-  return /\bentrou no show por (?:ingressos?|bilhetes?|tickets?)\b|\bse (?:ha )?uni(?:o|d[oa]) (?:al|a un) (?:ticket )?show\b|\b(?:recibio|recibiste)\s+(?:el\s+)?ticket\s+(?:de|del|para el)\s+show\b|\b(?:received|got)\s+(?:the\s+)?ticket\s+(?:for|from)\s+(?:the\s+)?show\b|\bjoined (?:the )?(?:ticket )?show\b/
-    .test(normalizedText);
+  return TICKET_SHOW_JOIN_TEXT_PATTERN.test(normalizedText);
 }
 
 export function isTipMessage(el) {
@@ -83,9 +94,7 @@ export function parseTipMenuOption(text) {
 
 export function parseTicketShowJoinUsername(text) {
   const normalizedText = String(text || "").replace(/\s+/g, " ").trim();
-  const match = normalizedText.match(
-    /^(.+?)\s+(?:se\s+(?:ha\s+)?(?:unio|unió|unido|unida)\s+(?:al|a un)\s+(?:ticket\s+)?show|(?:recibio|recibió|recibiste)\s+(?:el\s+)?ticket\s+(?:de|del|para el)\s+show|(?:received|got)\s+(?:the\s+)?ticket\s+(?:for|from)\s+(?:the\s+)?show|entrou no show por (?:ingressos?|bilhetes?|tickets?)|joined (?:the )?(?:ticket )?show)\b/i,
-  );
+  const match = normalizedText.match(TICKET_SHOW_JOIN_USERNAME_PATTERN);
   return match ? cleanUsername(match[1]) : "";
 }
 
@@ -107,16 +116,30 @@ export function isTicketTip({
   tipAmount,
   hasTicketDOM,
   messageText,
+  isActiveTicketShow,
+  isFirstTicketPriceTipInShow,
   now = Date.now(),
 }) {
   const knownTicketPrice = Number(ticketPrice) || 0;
   const amount = Number(tipAmount) || 0;
+  const isExactTicketPrice = knownTicketPrice > 0 && amount === knownTicketPrice;
+  const isTicketPriceOrHigher = knownTicketPrice > 0 && amount >= knownTicketPrice;
   return (
     Boolean(hasTicketDOM) ||
     isTicketPurchaseText(messageText) ||
-    (knownTicketPrice > 0 && amount === knownTicketPrice) ||
-    isPendingTicketPurchaseTip(user, now) ||
-    (knownTicketPrice <= 0 && isPendingTicketShowTip(user, now))
+    (isPendingTicketPurchaseTip(user, now) && isExactTicketPrice) ||
+    (Boolean(user?._ticketAdvancePurchasePending) &&
+      isExactTicketPrice &&
+      (!Number(user?._ticketAdvancePurchasePrice) ||
+        Number(user._ticketAdvancePurchasePrice) === knownTicketPrice)) ||
+    (Boolean(isActiveTicketShow) &&
+      Boolean(isFirstTicketPriceTipInShow) &&
+      isExactTicketPrice) ||
+    (!Boolean(isActiveTicketShow) &&
+      Boolean(isFirstTicketPriceTipInShow) &&
+      isTicketPriceOrHigher) ||
+    (isPendingTicketShowTip(user, now) &&
+      isExactTicketPrice)
   );
 }
 
@@ -217,13 +240,21 @@ function adjustSummaryForReclassification(event, nextType, nextItem) {
     JSON.parse(JSON.stringify(state.eventSummaryTotals));
 }
 
-function reclassifyRecentTicketTip(username, now) {
+function reclassifyRecentTicketTip(username, now, ticketPrice) {
+  const knownTicketPrice = Number(ticketPrice) || 0;
+  if (!knownTicketPrice) return false;
   const capturedEvent = [...(state.capturedEvents || [])]
     .reverse()
-    .find((event) => isRecentTicketTipEvent(event, username, now));
+    .find((event) =>
+      isRecentTicketTipEvent(event, username, now) &&
+      (Number(event.price) || Number(event.tokens) || 0) === knownTicketPrice
+    );
   const generalEvent = [...(state.events || [])]
     .reverse()
-    .find((event) => isRecentTicketTipEvent(event, username, now));
+    .find((event) =>
+      isRecentTicketTipEvent(event, username, now) &&
+      (Number(event.price) || Number(event.tokens) || 0) === knownTicketPrice
+    );
   const summaryEvent = capturedEvent || generalEvent;
   if (!summaryEvent) return false;
 
@@ -262,10 +293,9 @@ function markMessageProcessed(el, msgId) {
 }
 
 export function checkActiveCamTicketPrice() {
-  state.currentTicketPrice = 0;
-  const camButtons = document.querySelectorAll(
+  const camButtons = globalThis.document?.querySelectorAll?.(
     '.ViewCamGroup__wrapper button, [class*="ViewCamGroup"] button, [class*="ShutterButton"], button'
-  );
+  ) || [];
   for (const btn of camButtons) {
     const text = (btn.textContent || "").trim();
     const ticketPrice = parseTicketPriceFromText(text);
@@ -318,12 +348,12 @@ export function registerCapturedEvent(item, price, type, messageId, username, de
       ...details,
     };
     state.capturedEvents.push(capturedEvent);
-    if (state.capturedEvents.length > 500) state.capturedEvents.shift();
+    trimCapturedEvents(state.capturedEvents);
 
     recordDailyLargestTip(capturedEvent, localDateKey(capturedEvent.timestamp));
     if (!todayBucket.capturedEvents.some((event) => event?.id === messageId)) {
       todayBucket.capturedEvents.push(capturedEvent);
-      if (todayBucket.capturedEvents.length > 500) todayBucket.capturedEvents.shift();
+      trimCapturedEvents(todayBucket.capturedEvents);
     }
     if (details.menuOption) {
       addNamedEventTotal(todayBucket, "menuOptionTotals", details.menuOption, itemPrice);
@@ -336,7 +366,7 @@ export function registerCapturedEvent(item, price, type, messageId, username, de
       if (!Array.isArray(currentSegment.capturedEvents)) currentSegment.capturedEvents = [];
       if (!currentSegment.capturedEvents.some((event) => event?.id === messageId)) {
         currentSegment.capturedEvents.push(capturedEvent);
-        if (currentSegment.capturedEvents.length > 500) currentSegment.capturedEvents.shift();
+        trimCapturedEvents(currentSegment.capturedEvents);
       }
     }
 
@@ -455,12 +485,25 @@ function isTicketPurchaseMessage(el) {
   );
 }
 
+function isTicketShowAnnouncementMessage(el) {
+  return Boolean(
+    el?.classList?.contains("TicketShowAnnouncedBaseMessage") ||
+    el?.querySelector?.("[class*='TicketShowAnnounced']"),
+  );
+}
+
+export function isShowCancellationMessage(el) {
+  return Boolean(el?.classList?.contains("group-show-cancelled-message"));
+}
+
 export function shouldIgnoreSystemMessage(el) {
   return (
-    isSystemGoalOrLovenseElement(el) &&
-    !isContentPurchaseMessage(el) &&
-    !isTicketPurchaseMessage(el) &&
-    !isTicketShowJoinText(el?.textContent)
+    isShowCancellationMessage(el) ||
+    (isSystemGoalOrLovenseElement(el) &&
+      !isContentPurchaseMessage(el) &&
+      !isTicketPurchaseMessage(el) &&
+      !isTicketShowAnnouncementMessage(el) &&
+      !isTicketShowJoinText(el?.textContent))
   );
 }
 
@@ -548,7 +591,6 @@ function extractRecentMessagesForUser(mutedName) {
 export function processMessage(
   el,
   {
-    ignoreTicketPriceAnnouncement = false,
     ignoreTicketPurchaseCorrelation = false,
   } = {},
 ) {
@@ -571,8 +613,14 @@ export function processMessage(
   if (shouldIgnoreSystemMessage(el)) return;
 
   if (
-    el.classList?.contains("TicketShowAnnouncedBaseMessage") ||
-    el.querySelector("[class*='TicketShowAnnounced']") ||
+    !ignoreTicketPurchaseCorrelation &&
+    (isTicketPurchaseMessage(el) || isTipMessage(el))
+  ) {
+    checkActiveCamTicketPrice();
+  }
+
+  if (
+    isTicketShowAnnouncementMessage(el) ||
     isTicketShowAnnouncementText(el.textContent)
   ) {
     markMessageProcessed(el, msgId);
@@ -580,9 +628,16 @@ export function processMessage(
     const priceEl = el.querySelector("[class*='TicketShowAnnouncedBaseMessage__highlight'], [class*='TicketShowAnnouncedBaseMessage__button'], button");
     const priceMatch = (priceEl?.textContent || "").match(/(\d+)\s*tk/i) || (el.textContent || "").match(/(\d+)\s*tk/i);
 
-    if (priceMatch && !ignoreTicketPriceAnnouncement) {
+    if (priceMatch) {
+      state.currentTicketPrice = 0;
       state.currentTicketPrice = Number(priceMatch[1]);
+    } else {
+      state.currentTicketPrice = 0;
     }
+    state.currentTicketShowStartedAt = Math.max(
+      Date.now(),
+      (Number(state.currentTicketShowStartedAt) || 0) + 1,
+    );
     return;
   }
 
@@ -812,9 +867,14 @@ export function processMessage(
       const fullElText = (el.textContent || "").toLowerCase();
       const currentTicketPrice = Number(state.currentTicketPrice) || 0;
       const tipAmount = Number(amount) || 0;
+      const ticketShowStartedAt =
+        Number(state.currentTicketShowStartedAt) || 0;
+      const isFirstTicketPriceTipInShow =
+        ticketShowStartedAt > 0 &&
+        Number(u?._ticketShowTicketPriceTipAt) !== ticketShowStartedAt;
 
       const hasTicketDOM = Boolean(
-        el.querySelector("[class*='ticket'], [class*='Ticket'], [class*='TicketShowGotTicket']"),
+        el.querySelector("[class*='TicketShowGotTicket']"),
       );
       const hasTipMenu = Boolean(
         el.querySelector(
@@ -832,6 +892,8 @@ export function processMessage(
           tipAmount,
           hasTicketDOM,
           messageText: fullElText,
+          isActiveTicketShow: Boolean(state.currentTicketShowActive),
+          isFirstTicketPriceTipInShow,
         })
       ) {
         eventType = "Ingresso Ticket";
@@ -841,6 +903,9 @@ export function processMessage(
           u._hasTicket = true;
           u._ticketShowJoinedAt = 0;
           u._ticketPurchaseAt = 0;
+          if (ticketShowStartedAt > 0) {
+            u._ticketShowTicketPriceTipAt = ticketShowStartedAt;
+          }
         }
       } else if (
         el.querySelector(
@@ -852,6 +917,10 @@ export function processMessage(
       }
 
       if (u) {
+        if (u._ticketAdvancePurchasePending) {
+          u._ticketAdvancePurchasePending = false;
+          u._ticketAdvancePurchasePrice = 0;
+        }
         if (rememberProcessedMessage(u, msgId)) {
           if (getMonitoring()) {
             u.tokens += amount;
@@ -1039,12 +1108,16 @@ export function processMessage(
       });
     }
   } else if (
-    isTicketPurchaseMessage(el)
+    isTicketPurchaseMessage(el) &&
+    !isTicketShowJoinText(el.textContent)
   ) {
     markMessageProcessed(el, msgId);
     recordTicketPurchaseActivity();
 
-    let username = parseTicketShowJoinUsername(rawElText) || name;
+    let username =
+      parseTicketShowJoinUsername(rawElText) ||
+      parseTicketPurchaseUsername(rawElText) ||
+      name;
     if (!username || username === "Usuário") {
       const uEl = el.querySelector(
         ".user-levels-username-text, .user-name-card-wrapper-text, .username-text, .username, [class*='username']"
@@ -1057,14 +1130,37 @@ export function processMessage(
     }
     username = username || "Usuário";
 
+    if (username !== "Usuário") {
+      registerCapturedEvent(
+        username,
+        0,
+        "Participante de show",
+        msgId,
+        username,
+        { showParticipantType: "ticket" },
+      );
+    }
+
     const u = userRecord(username);
     if (u) {
       u._hasTicket = true;
-      if (!ignoreTicketPurchaseCorrelation) {
+      if (ignoreTicketPurchaseCorrelation) {
+        u._ticketAdvancePurchasePending = true;
+        u._ticketAdvancePurchasePrice =
+          Number(state.currentTicketPrice) || 0;
+      } else {
+        u._ticketAdvancePurchasePending = false;
+        u._ticketAdvancePurchasePrice = 0;
         const purchasedAt = Date.now();
         u._ticketShowJoinedAt = purchasedAt;
         u._ticketPurchaseAt = purchasedAt;
-        if (reclassifyRecentTicketTip(username, purchasedAt)) {
+        if (
+          reclassifyRecentTicketTip(
+            username,
+            purchasedAt,
+            state.currentTicketPrice,
+          )
+        ) {
           u._ticketShowJoinedAt = 0;
           u._ticketPurchaseAt = 0;
           saveToGlobalHistory();
@@ -1133,7 +1229,9 @@ export function processMessage(
     el.classList?.contains("group-show-user-joined-message") ||
     isTicketShowJoinText(el.textContent)
   ) {
-    if (isTicketShowJoinText(el.textContent)) {
+    const isTicketShowJoin = isTicketShowJoinText(el.textContent);
+    const showParticipantType = isTicketShowJoin ? "ticket" : "group";
+    if (isTicketShowJoin) {
       recordTicketPurchaseActivity();
     }
     markMessageProcessed(el, msgId);
@@ -1150,6 +1248,17 @@ export function processMessage(
     }
 
     if (username) {
+      if (username !== "Usuário") {
+        registerCapturedEvent(
+          username,
+          0,
+          "Participante de show",
+          msgId,
+          username,
+          { showParticipantType },
+        );
+      }
+
       const u = userRecord(username);
       if (u) {
         u._hasTicket = true;

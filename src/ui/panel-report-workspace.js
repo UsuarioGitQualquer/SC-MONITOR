@@ -49,17 +49,11 @@ function buildReportInsightsCard(repA, dailyA = {}) {
     insights.push(`👑 Maior doador: <strong>${clean(topUsers[0].name)}</strong> (${Number(topUsers[0].tokens) || 0} tk)`);
   }
 
-  const suspectCount = Array.isArray(state.suspectBots) ? state.suspectBots.length : 0;
-  const modCount = Array.isArray(state.moderationLogs) ? state.moderationLogs.length : 0;
-  if (suspectCount > 0 || modCount > 0) {
-    insights.push(`🛡️ Segurança: <strong>${suspectCount}</strong> bot(s) suspeito(s) • <strong>${modCount}</strong> moderação(ões)`);
-  }
-
   if (insights.length === 0) return "";
 
   return `
     <div class="scm-cyber-card" style="margin-bottom:12px; border-left: 3px solid #ff7b00;">
-      <div style="font-weight: 700; color: #ff7b00; font-size: 11.5px; margin-bottom: 6px;">💡 Destaques da Sessão</div>
+      <div style="font-weight: 700; color: #ff7b00; font-size: 11.5px; margin-bottom: 6px;">💡 Destaques da Live</div>
       <div style="display:flex; flex-direction:column; gap:4px; font-size:11px; color:#e2e8f0;">
         ${insights.map((line) => `<div>${line}</div>`).join("")}
       </div>
@@ -177,7 +171,7 @@ export function createPanelReportWorkspace({
                     `<option value="${clean(s.sessionId)}" ${s.sessionId === reportState.selectedSessionId ? "selected" : ""}>Live ${idx + 1} • ${clean(s.startedAt || "--:--")} → ${clean(s.endedAt || "ativa")}${s.status === "ENCERRADA" ? "" : " • ativa"}</option>`
                 )
                 .join("")
-            : `<option value="">Sessão única</option>`;
+            : `<option value="">Live única</option>`;
       }
 
       const liveBSelect = panel.querySelector("#scm-report-live-b");
@@ -338,7 +332,7 @@ export function createPanelReportWorkspace({
       workspace.innerHTML = `
         <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:8px; margin-bottom:12px;">
           <div class="scm-cyber-card" style="border-left: 3px solid #00e5ff; background:linear-gradient(135deg, rgba(0,229,255,0.12), #181a36 78%);">
-            <small style="color:#8b92b8;">Tokens (gorjetas + shows estimados)</small>
+            <small style="color:#8b92b8;">Tokens (ganhos registrados)</small>
             <strong style="font-size:16px; color:#00e5ff;">${repA.totalTokens} tk${repB ? formatDeltaHtml(repA.totalTokens, repB.totalTokens, " tk") : ""}</strong>
           </div>
           <div class="scm-cyber-card" style="border-left: 3px solid #ff7b00; background:linear-gradient(135deg, rgba(255,123,0,0.12), #181a36 78%);">
@@ -405,7 +399,7 @@ export function createPanelReportWorkspace({
           menu: false,
           tips: false,
           roulette: false,
-        })}
+        }, "", { showSafetyTables: false })}
 
         <div class="scm-cyber-card" style="margin-bottom:12px;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">

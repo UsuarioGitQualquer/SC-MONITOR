@@ -64,6 +64,20 @@ test("renders an empty-state wave chart with escaped text", () => {
   assert.match(html, /Aguardando dados para traçar curva/);
 });
 
+test("shows the recorded peak separately from the average-audience line", () => {
+  const html = buildCombinedAudienceEarningsChart({
+    title: "Público e ganhos",
+    subtitle: "26/11/2026",
+    peakViewers: 42,
+    audiencePoints: [{ label: "12:00", value: 10 }, { label: "12:20", value: 12 }],
+  });
+
+  assert.match(html, />Pico: 42<\/span>/);
+  assert.match(html, />12<\/text>/);
+  assert.match(html, /fill="#f97316"/);
+  assert.match(html, /Público médio/);
+});
+
 test("renders wave chart points and escapes labels and tooltip content", () => {
   const html = buildNeonWaveAreaChart({
     title: "Audiência",
@@ -78,6 +92,16 @@ test("renders wave chart points and escapes labels and tooltip content", () => {
   assert.match(html, /&lt;início&gt;/);
   assert.match(html, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
   assert.doesNotMatch(html, /<script>/);
+});
+
+test("renders an optional wave chart footer note", () => {
+  const html = buildNeonWaveAreaChart({
+    title: "Usuários listados",
+    points: [{ label: "12:00", value: 8 }],
+    footerNote: "Nome na lista da sala",
+  });
+
+  assert.match(html, /Nome na lista da sala/);
 });
 
 test("renders combined audience and earnings with event markers", () => {
@@ -100,6 +124,7 @@ test("renders combined audience and earnings with event markers", () => {
   assert.match(html, /Público médio/);
   assert.match(html, /Ganhos por intervalo/);
   assert.match(html, /Shows/);
+  assert.match(html, /Trechos sem preenchimento indicam que não foi possível coletar dados de público nesses intervalos/);
   assert.match(html, /Show: privado/);
   assert.match(html, /&lt;público&gt;/);
   assert.match(html, /viewBox="0 0 720 150"/);
@@ -250,22 +275,89 @@ test("extends an active ticket show to the last chart interval", () => {
   );
 });
 
-test("continues the last known audience across missing earnings-only blocks", () => {
+test("leaves a gap in the audience line across earnings-only blocks", () => {
   const html = buildCombinedAudienceEarningsChart({
-    audiencePoints: [{ label: "12:00", value: 411 }],
+    audiencePoints: [
+      { label: "12:00", value: 411 },
+      { label: "12:01", value: 400 },
+      { label: "12:04", value: 380 },
+      { label: "12:05", value: 390 },
+    ],
     earningsBars: [
-      { label: "12:01", value: 10 },
-      { label: "12:02", value: 20 },
+      { label: "12:02", value: 10 },
+      { label: "12:03", value: 20 },
     ],
     eventMarkers: [
-      { label: "12:01", type: "Show" },
       { label: "12:02", type: "Show" },
+      { label: "12:03", type: "Show" },
     ],
   });
 
   assert.match(html, /411 espectadores/);
-  assert.match(html, /<path d="M 28\.0.* L /);
-  assert.doesNotMatch(html, /0 espectadores/);
+  const audienceLine = html.match(/<path d="([^"]*)" fill="none" stroke="#ff86ad"/)?.[1] || "";
+  assert.equal((audienceLine.match(/M /g) || []).length, 2);
+  assert.equal((audienceLine.match(/L /g) || []).length, 2);
+  assert.doesNotMatch(html, /:\s*0 espectadores/);
+});
+
+test("event-only labels do not break the audience line between chart intervals", () => {
+  const html = buildCombinedAudienceEarningsChart({
+    audiencePoints: [
+      { label: "10:45", value: 411 },
+      { label: "10:50", value: 400 },
+      { label: "10:55", value: 380 },
+      { label: "11:00", value: 390 },
+    ],
+    earningsBars: [
+      { label: "10:45", value: 10 },
+      { label: "10:50", value: 20 },
+      { label: "10:55", value: 15 },
+      { label: "11:00", value: 12 },
+    ],
+    eventMarkers: [
+      {
+        label: "10:48",
+        type: "Início do show",
+        showType: "ticket",
+        showBoundary: "start",
+      },
+      {
+        label: "10:57",
+        type: "Fim do show",
+        showType: "ticket",
+        showBoundary: "end",
+      },
+    ],
+  });
+
+  const audienceLine = html.match(/<path d="([^"]*)" fill="none" stroke="#ff86ad"/)?.[1] || "";
+  assert.equal((audienceLine.match(/M /g) || []).length, 1);
+  assert.equal((audienceLine.match(/L /g) || []).length, 3);
+});
+
+test("does not draw a misleading span for a ticket show shorter than one chart interval", () => {
+  const html = buildCombinedAudienceEarningsChart({
+    audiencePoints: [{ label: "12:00", value: 10 }],
+    eventMarkers: [
+      {
+        label: "12:00",
+        type: "Início do show",
+        showType: "ticket",
+        showBoundary: "start",
+        tooltip: "Início do Ticket show",
+      },
+      {
+        label: "12:00",
+        type: "Fim do show",
+        showType: "ticket",
+        showBoundary: "end",
+        tooltip: "Fim do Ticket show",
+      },
+    ],
+  });
+
+  assert.match(html, /Ticket show \(&lt;1 min\)/);
+  assert.doesNotMatch(html, /fill="#22d3ee" fill-opacity="0\.14"/);
 });
 
 test("renders audience league data and safely escapes chart labels", () => {
@@ -282,11 +374,11 @@ test("renders audience league data and safely escapes chart labels", () => {
       leagueSamples: 1,
     }],
     12,
-    "Auto • Média por bloco de 1 min • sessão atual",
+    "Auto • Média por bloco de 1 min • live atual",
   );
   assert.match(html, /&lt;bloco&gt;/);
   assert.match(html, /5 listados/);
-  assert.match(html, /Auto • Média por bloco de 1 min • sessão atual/);
+  assert.match(html, /Auto • Média por bloco de 1 min • live atual/);
   assert.doesNotMatch(html, /<bloco>/);
 });
 

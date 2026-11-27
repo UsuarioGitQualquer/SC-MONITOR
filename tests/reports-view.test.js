@@ -8,7 +8,10 @@ import {
   buildSessionReportHtml,
   formatReportDuration,
 } from "../src/ui/reports-view.js";
-import { buildPeriodReportSummary } from "../src/ui/report-data.js";
+import {
+  buildPeriodReportSummary,
+  buildReportData,
+} from "../src/ui/report-data.js";
 
 test("renders daily activity rankings when enabled", () => {
   const html = buildDailyAdditionalMetricsHtml({
@@ -56,16 +59,89 @@ test("can keep all activity rankings out of panel metrics", () => {
   assert.doesNotMatch(html, /Resultados mais frequentes na roleta/);
 });
 
+test("can keep safety details out of panel metrics while retaining them by default", () => {
+  const report = {
+    suspectBots: [{ username: "Suspect", suspicionLevel: "Alto", suspicionScore: 40 }],
+    mutedUsers: [{ username: "Muted", mutedBy: "Moderator", lastMessage: "spam" }],
+    moderationStats: { attempts: 1, successes: 1, failures: 0, pending: 0 },
+  };
+  const pageHtml = buildDailyAdditionalMetricsHtml(report, {}, false);
+  const panelHtml = buildDailyAdditionalMetricsHtml(
+    report,
+    {},
+    false,
+    false,
+    { menu: false, tips: false, roulette: false },
+    "",
+    { showSafetyTables: false },
+  );
+
+  assert.match(pageHtml, /Suspeitas de bots no dia/);
+  assert.match(pageHtml, /Usuários silenciados/);
+  assert.match(pageHtml, /1 tentativa\(s\), 1 confirmada\(s\)/);
+  assert.doesNotMatch(panelHtml, /Suspeitas de bots/);
+  assert.doesNotMatch(panelHtml, /Usuários silenciados/);
+  assert.doesNotMatch(panelHtml, /Moderação/);
+});
+
 test("renders daily report details and escapes user content", () => {
   const html = buildDailyReportHtml({
     report: {
+      modelId: "model-a",
       modelName: "modelo",
       dateBr: "20/11/2026",
+      dateKey: "2026-11-20",
       totalTokens: 120,
       peakViewers: 30,
       avgViewers: 12,
       bruteSeconds: 3600,
       netSeconds: 1800,
+      showCounts: { ticket: 1, private: 2, exclusive: 3, group: 4 },
+      showStats: {
+        ticket: {
+          earnings: 60,
+          ticketsSold: 3,
+          ticketShows: [{
+            ticketsSold: 3,
+            ticketPrice: 20,
+            earnings: 60,
+            startedAt: Date.parse("2026-11-20T14:30:00-03:00"),
+            endedAt: Date.parse("2026-11-20T14:35:00-03:00"),
+            ticketPriceBreakdown: [{ price: 20, quantity: 3 }],
+            participants: ["TicketUser"],
+            participantEntries: [{ name: "TicketUser", count: 3 }],
+          }],
+        },
+        private: {
+          earnings: 50,
+          privateShows: [{
+            startedAt: Date.parse("2026-11-20T15:10:00-03:00"),
+            endedAt: Date.parse("2026-11-20T15:15:00-03:00"),
+            earnings: 50,
+          }],
+        },
+        exclusive: {
+          earnings: 75,
+          exclusiveShows: [{
+            startedAt: Date.parse("2026-11-20T15:20:00-03:00"),
+            endedAt: Date.parse("2026-11-20T15:25:00-03:00"),
+            earnings: 75,
+          }],
+        },
+        group: {
+          earnings: 90,
+          groupShows: [{
+            earnings: 90,
+            startedAt: Date.parse("2026-11-20T16:30:00-03:00"),
+            endedAt: Date.parse("2026-11-20T16:40:00-03:00"),
+            participants: ["GroupUser", "<script>"],
+            participantEntries: [
+              { name: "GroupUser", count: 2 },
+              { name: "<script>", count: 1 },
+            ],
+          }],
+        },
+      },
       liveSessions: [{
         startedAt: "12:00",
         endedAt: "13:00",
@@ -136,16 +212,50 @@ test("renders daily report details and escapes user content", () => {
         item: "Ticket show (Fim)",
         showBoundary: "end",
       }],
+      manualEarnings: [{
+        id: "manual-private-chat",
+        type: "Chat privado",
+        manualEntry: true,
+        manualAmount: 17,
+        user: "<ManualUser>",
+        scope: "day",
+      }],
     },
     timeBars: [{
       label: "14:08",
       value: 1,
       avgListedUsers: 4,
       listedUsersSamples: 1,
+      avgTokensUsers: 7,
+      tokensUsersSamples: 2,
       tooltip: "14:08 - 14:09 (2m): 1 tk",
     }],
     timeStepMin: 2,
     enableSuspectRemoval: true,
+  });
+
+  test("shows unregistered Ticket show earnings when the price was not captured", () => {
+    const dateKey = "2026-11-26";
+    const daily = {
+      capturedEvents: [{
+        id: "ticket-sale-unknown-price",
+        timestamp: Date.parse("2026-11-26T10:30:00-03:00"),
+        type: "Ingresso Ticket",
+        item: "Compra de Ingresso",
+        price: 1,
+      }],
+    };
+    const report = buildReportData({
+      modelId: "test-model",
+      modelName: "Test",
+      dateKey,
+    }, daily);
+    const html = buildDailyReportHtml({ report, daily });
+
+    assert.match(html, /Ticket show<\/small>\s*<strong>0<\/strong>/);
+    assert.match(html, /Ganho estimado:<\/small>\s*Não registrado/);
+    assert.match(html, /Ingressos vendidos:<\/small>\s*1/);
+    assert.doesNotMatch(html, /Ganho estimado:<\/small>\s*1 tk/);
   });
 
   assert.match(html, /120 tk/);
@@ -159,15 +269,51 @@ test("renders daily report details and escapes user content", () => {
   assert.match(html, /Gorjetas<\/small>/);
   assert.match(html, /Mensagens<\/small>/);
   assert.match(html, /Lives registradas/);
+  assert.match(html, /Shows realizados no dia/);
+  assert.match(html, /<h2>Shows<\/h2>/);
+  assert.match(html, /Ticket show<\/small>\s*<strong>1<\/strong>/);
+  assert.match(html, /Dependendo do momento em que a extensão é iniciada, alguns anúncios, compras ou gorjetas podem não ser capturados/);
+  assert.match(html, /Show Privado<\/small>\s*<strong>2<\/strong>/);
+  assert.match(html, /Show Exclusivo<\/small>\s*<strong>3<\/strong>/);
+  assert.match(html, /Show em Grupo<\/small>\s*<strong>4<\/strong>/);
+  assert.doesNotMatch(html, /report-card--show-counts-compact/);
+  assert.match(html, /Ganho estimado:<\/small>\s*60 tk/);
+  assert.match(html, /Ingressos vendidos:<\/small>\s*3/);
+  assert.match(html, /Detalhamento dos Ticket shows/);
+  assert.match(html, /Preço por ingresso:<\/small>\s*3 × 20 tk/);
+  assert.match(html, /Detalhamento dos Shows em Grupo/);
+  assert.match(html, /Detalhamento dos Shows Privados/);
+  assert.match(html, /Detalhamento dos Shows Exclusivos/);
+  assert.match(html, /Início:<\/small>\s*14:30/);
+  assert.match(html, /Fim:<\/small>\s*14:35/);
+  assert.match(html, /Início:<\/small>\s*15:10/);
+  assert.match(html, /Fim:<\/small>\s*15:15/);
+  assert.match(html, /Início:<\/small>\s*15:20/);
+  assert.match(html, /Fim:<\/small>\s*15:25/);
+  assert.match(html, /Início:<\/small>\s*16:30/);
+  assert.match(html, /Fim:<\/small>\s*16:40/);
+  assert.match(html, /Ver participantes/);
+  assert.match(html, /TicketUser/);
+  assert.match(html, /GroupUser/);
+  assert.match(html, /Entradas no show:<\/small>\s*3/);
+  assert.match(html, /Entradas no show:<\/small>\s*2/);
+  assert.match(html, /&lt;script&gt;/);
+  assert.match(html, /Ganho estimado:<\/small>\s*50 tk/);
+  assert.match(html, /Ganho estimado:<\/small>\s*75 tk/);
+  assert.match(html, /Ganho estimado:<\/small>\s*90 tk/);
   assert.match(html, /Rei da sala neste dia/);
   assert.match(html, /&lt;King&gt;/);
   assert.match(html, /Chat capturado/);
   assert.match(html, /Ganhos por intervalo/);
   assert.match(html, /Fluxo de Tokens \(Blocos de 2 min\)/);
   assert.match(html, /Fluxo de Usuários \(pessoas listadas\)/);
+  assert.match(html, /Usuários listados são aqueles cujo nome aparece na lista de usuários da sala/);
+  assert.match(html, /Fluxo de Usuários com Tokens/);
+  assert.match(html, /14:08: 7 usuários com tokens \(média\)/);
   assert.match(html, /14:08: 4 pessoas listadas \(média\)/);
   assert.match(html, /Shows/);
   assert.match(html, /Show: Show privado de 10 min/);
+  assert.match(html, /Pico: 30/);
   assert.match(html, /Ticket show/);
   assert.match(html, /Início do Ticket show/);
   assert.match(html, /Fim do Ticket show/);
@@ -175,6 +321,17 @@ test("renders daily report details and escapes user content", () => {
   assert.doesNotMatch(html, /Meta alcançada/);
   assert.match(html, /Blocos de 2 minutos/);
   assert.match(html, /Ganhos por tipo/);
+  assert.match(html, /data-manual-entry-form/);
+  assert.match(html, /name="scope"/);
+  assert.match(html, /name="kind"/);
+  assert.match(html, /name="amount"/);
+  assert.match(html, /name="username"/);
+  assert.match(html, /name="showId"/);
+  assert.match(html, /Ganhos manuais registrados/);
+  assert.match(html, /17 tk/);
+  assert.match(html, /class="report-delete-manual-entry" data-model-id="model-a" data-entry-date="2026-11-20" data-entry-id="manual-private-chat"/);
+  assert.match(html, /&lt;ManualUser&gt;/);
+  assert.doesNotMatch(html, /<ManualUser>/);
   assert.match(html, /3 eventos · 150 tk/);
   assert.match(html, /Ritmo/);
   assert.match(html, /150 tk\/h/);
@@ -204,6 +361,8 @@ test("renders daily report details and escapes user content", () => {
   assert.match(html, /<th>Ação<\/th>/);
   assert.match(html, /class="report-dismiss-suspect" data-username="Suspect"/);
   assert.match(html, /Usuários silenciados/);
+  assert.match(html, /Última mensagem/);
+  assert.match(html, /spam/);
   assert.match(html, /1 tentativa\(s\), 0 confirmada\(s\), 1 falha\(s\) e 2 pendente\(s\)/);
   assert.match(html, /Maior gorjeta do dia/);
   assert.match(
@@ -291,6 +450,16 @@ test("marks the start and end of group shows in the daily chart", () => {
           showBoundary: "end",
         },
       ],
+      manualEarnings: [{
+        id: "manual-private-show",
+        timestamp: Date.parse("2026-11-23T12:40:00-03:00"),
+        type: "Show Privado",
+        item: "Show privado · ganho manual",
+        manualEntry: true,
+        manualNewShow: true,
+        manualAmount: 20,
+        showBoundary: "start",
+      }],
     },
     timeBars: [{ label: "12:00", value: 10 }],
     audiencePoints: [{ label: "12:00", viewers: 5 }],
@@ -299,6 +468,51 @@ test("marks the start and end of group shows in the daily chart", () => {
   assert.match(html, /Início do show: Show em Grupo/);
   assert.match(html, /Fim do show: Show em Grupo/);
   assert.doesNotMatch(html, /Show em Grupo \(1 min\)/);
+  assert.doesNotMatch(html, /Show privado · ganho manual/);
+});
+
+test("labels reconstructed ticket shows as estimated in the report and chart", () => {
+  const dateKey = "2026-11-23";
+  const daily = {
+    date: dateKey,
+    capturedEvents: [
+      {
+        id: "ticket-sale-one",
+        timestamp: Date.parse("2026-11-23T12:02:00-03:00"),
+        type: "Ingresso Ticket",
+        user: "BuyerOne",
+        price: 16,
+      },
+      {
+        id: "ticket-sale-two",
+        timestamp: Date.parse("2026-11-23T12:04:00-03:00"),
+        type: "Ingresso Ticket",
+        user: "BuyerTwo",
+        price: 16,
+      },
+      {
+        id: "ticket-end",
+        timestamp: Date.parse("2026-11-23T12:10:00-03:00"),
+        type: "Ticket show",
+        item: "Ticket show (Fim)",
+        showBoundary: "end",
+      },
+    ],
+  };
+  const report = buildReportData({
+    modelId: "test-model",
+    modelName: "modelo",
+    dateKey,
+  }, daily);
+  const html = buildDailyReportHtml({
+    report,
+    daily,
+    audiencePoints: [{ label: "12:05", viewers: 10 }],
+  });
+
+  assert.match(html, /Início estimado:<\/small>/);
+  assert.match(html, /Preço por ingresso:<\/small>\s*2 × 16 tk/);
+  assert.match(html, /fill="#22d3ee" fill-opacity="0\.14"/);
 });
 
 test("adds percentage insights for daily and same-hour comparisons", () => {
@@ -570,7 +784,20 @@ test("renders period totals and weekday summaries", () => {
     rouletteOutcomeRows: [{ label: "Gold", count: 2, tokens: 20 }],
     donorRows: [{ name: "TestModel", tips: 5, days: 2, tokens: 200 }],
     suspectRows: [{ username: "Bot?", days: 2, suspicionLevel: "Alto", suspicionScore: 9 }],
-    mutedRows: [{ username: "Muted", days: 1, mutedBy: "Mod", lastMessage: "spam" }],
+    mutedRows: [{
+      username: "Muted",
+      days: 1,
+      mutedBy: "Mod",
+      dateKey: "2026-01-05",
+      lastMessage: "spam",
+    }],
+    mutedLogRows: [{
+      username: "Muted",
+      mutedBy: "Mod",
+      dateKey: "2026-01-05",
+      timestamp: Date.parse("2026-01-05T12:00:00-03:00"),
+      lastMessage: "message from this day",
+    }],
     moderationLogCount: 2,
     moderationSuccessCount: 1,
     moderationFailureCount: 1,
@@ -623,6 +850,7 @@ test("renders period totals and weekday summaries", () => {
     ],
   }, {
     enableSuspectRemoval: true,
+    enableMutedRemoval: true,
     comparisonSummary: {
       start: "2026-11-11",
       end: "2026-11-17",
@@ -704,6 +932,11 @@ test("renders period totals and weekday summaries", () => {
   assert.match(mutedSection, /<th>Usuário<\/th><th>Por<\/th>/);
   assert.doesNotMatch(mutedSection, /<th[^>]*>Dias<\/th>/);
   assert.match(mutedSection, /<td>Muted<\/td>\s*<td>Mod<\/td>/);
+  assert.match(mutedSection, /<th>Ação<\/th>/);
+  assert.match(
+    mutedSection,
+    /class="report-delete-muted-user" data-model-id="model-a" data-username="Muted" data-start-date="2026-11-18" data-end-date="2026-11-20"/,
+  );
   assert.match(html, /Média de tokens por dia da semana/);
   assert.match(html, /Novos usuários por dia/);
   assert.match(html, /Usuários recorrentes por dia/);
@@ -720,6 +953,9 @@ test("renders period totals and weekday summaries", () => {
   assert.match(html, /Ganhos por tipo/);
   assert.match(html, /2 dias com dados/);
   assert.match(html, /Principais doadores no período/);
+  assert.match(html, /Mensagens dos usuários silenciados/);
+  assert.match(html, /message from this day/);
+  assert.match(html, /05\/01\/2026/);
   assert.match(html, /class="report-dismiss-suspect" data-username="Bot\?"/);
   assert.match(html, /Melhor horário/);
   assert.match(html, /Maior gorjeta no período/);
@@ -791,6 +1027,7 @@ test("identifies the recorded date in period insights", () => {
   const html = buildPeriodReportHtml(summary);
 
   assert.match(html, /Houve registros em 21\/11\/2026 \(1 de 7 dias do período; 14%\)\./);
+  assert.match(html, /Resumo dos Shows no período/);
   assert.match(html, /Ganhos por data/);
   assert.match(html, /Média de tokens por dia da semana/);
   assert.match(html, /Domingo a sábado · vazios = sem registro/);
@@ -801,6 +1038,62 @@ test("identifies the recorded date in period insights", () => {
   for (const weekday of ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"]) {
     assert.match(weekdayChart, new RegExp(`>${weekday}</text>`));
   }
+});
+
+test("groups period show rows by type and date and omits empty participant lists", () => {
+  const earlierDate = "2026-11-24";
+  const dateKey = "2026-11-25";
+  const summary = buildPeriodReportSummary({
+    modelId: "model",
+    start: earlierDate,
+    end: dateKey,
+    dateKeys: [earlierDate, dateKey],
+    dailyByDate: {
+      [earlierDate]: {
+        capturedEvents: [
+          { id: "older-ticket-start", timestamp: Date.parse("2026-11-24T13:00:00-03:00"), type: "Ticket show", item: "Ticket show (Início)", showBoundary: "start", ticketPrice: 10 },
+          { id: "older-ticket-sale", timestamp: Date.parse("2026-11-24T13:01:00-03:00"), type: "Ingresso Ticket", item: "Compra de Ingresso", price: 10 },
+          { id: "older-ticket-end", timestamp: Date.parse("2026-11-24T13:03:00-03:00"), type: "Ticket show", item: "Ticket show (Fim)", showBoundary: "end" },
+        ],
+      },
+      [dateKey]: {
+        capturedEvents: [
+          { id: "ticket-start", timestamp: Date.parse("2026-11-25T14:00:00-03:00"), type: "Ticket show", item: "Ticket show (Início)", showBoundary: "start", ticketPrice: 30 },
+          { id: "ticket-user", timestamp: Date.parse("2026-11-25T14:01:00-03:00"), type: "Participante de show", item: "TicketUser", user: "TicketUser", showParticipantType: "ticket" },
+          { id: "ticket-sale", timestamp: Date.parse("2026-11-25T14:02:00-03:00"), type: "Ingresso Ticket", item: "Compra de Ingresso", price: 30 },
+          { id: "ticket-end", timestamp: Date.parse("2026-11-25T14:03:00-03:00"), type: "Ticket show", item: "Ticket show (Fim)", showBoundary: "end" },
+          { id: "private-start", timestamp: Date.parse("2026-11-25T15:00:00-03:00"), type: "Show Privado", item: "Show Privado (Início)", showBoundary: "start", tokens: 20 },
+          { id: "private-end", timestamp: Date.parse("2026-11-25T15:05:00-03:00"), type: "Show Privado", item: "Show Privado (Fim)", showBoundary: "end" },
+          { id: "exclusive-start", timestamp: Date.parse("2026-11-25T16:00:00-03:00"), type: "Show Exclusivo", item: "Show Exclusivo (Início)", showBoundary: "start", tokens: 40 },
+          { id: "exclusive-end", timestamp: Date.parse("2026-11-25T16:05:00-03:00"), type: "Show Exclusivo", item: "Show Exclusivo (Fim)", showBoundary: "end" },
+          { id: "group-start", timestamp: Date.parse("2026-11-25T17:00:00-03:00"), type: "Show em Grupo", item: "Show em Grupo (Início)", showBoundary: "start", tokens: 15 },
+          { id: "group-end", timestamp: Date.parse("2026-11-25T17:05:00-03:00"), type: "Show em Grupo", item: "Show em Grupo (Fim)", showBoundary: "end" },
+        ],
+      },
+    },
+  });
+
+  const html = buildPeriodReportHtml(summary);
+
+  assert.match(html, /report-card--show-counts-compact/);
+  assert.match(html, /report-card--show-counts-period/);
+  assert.match(html, /class="period-show-folder"/);
+  assert.match(html, /class="period-show-date-folder"/);
+  assert.equal((html.match(/<details class="period-show-folder">/g) || []).length, 4);
+  assert.equal((html.match(/<details class="period-show-date-folder">/g) || []).length, 5);
+  assert.match(html, /<span>Shows Privados<\/span>/);
+  assert.match(html, /<span>Shows Exclusivos<\/span>/);
+  assert.match(html, /<span>Shows em Grupo<\/span>/);
+  const ticketFolderStart = html.indexOf('<details class="period-show-folder">');
+  const privateFolderStart = html.indexOf('<details class="period-show-folder">', ticketFolderStart + 1);
+  const ticketFolderHtml = html.slice(ticketFolderStart, privateFolderStart);
+  assert.match(ticketFolderHtml, /<span>Ticket shows<\/span>\s*<small>2 shows<\/small>/);
+  assert.ok(ticketFolderHtml.indexOf("25/11/2026") < ticketFolderHtml.indexOf("24/11/2026"));
+  assert.match(ticketFolderHtml, /daily-ticket-show-grid daily-ticket-show-grid--compact/);
+  assert.match(html, /Horário:<\/small> 14:00–14:03 · <small>Ingressos:<\/small> 1 · <small>Preço:<\/small> 1 × 30 tk · <small>Ganho:<\/small> 30 tk/);
+  assert.match(html, /Ver participantes<\/span> <span>\(1\)/);
+  assert.doesNotMatch(html, /Ver participantes<\/span> <span>\(0\)/);
+  assert.doesNotMatch(ticketFolderHtml, /<details class="period-show-date-folder" open>/);
 });
 
 test("always shows both moderation charts for a period with no moderation records", () => {
@@ -843,6 +1136,41 @@ test("omits audience comparisons when neither period has viewer samples", () => 
   assert.doesNotMatch(html, />Comparação da média de espectadores<\/strong>/);
 });
 
+test("renders period moderation details with per-record deletion without changing totals", () => {
+  const dateKey = "2026-11-23";
+  const summary = buildPeriodReportSummary({
+    modelId: "model-a",
+    start: dateKey,
+    end: dateKey,
+    dateKeys: [dateKey],
+    dailyByDate: {
+      [dateKey]: {
+        moderationStats: { attempts: 2, successes: 1, failures: 1, pending: 0 },
+        moderationLogs: [{
+          id: 'log-"1',
+          timestamp: Date.parse("2026-11-23T12:00:00-03:00"),
+          time: "23/11/2026 12:00",
+          user: "<user>",
+          message: "spam & link",
+          status: "SUCESSO",
+        }],
+      },
+    },
+  });
+
+  const html = buildPeriodReportHtml(summary, { enableModerationRemoval: true });
+
+  assert.match(html, /2 tentativa\(s\), 1 confirmada\(s\), 1 falha\(s\) e 0 pendente\(s\)/);
+  assert.match(html, /Ver registros detalhados \(1\)/);
+  assert.match(html, /class="report-delete-moderation-log"/);
+  assert.match(html, /data-model-id="model-a"/);
+  assert.match(html, /data-entry-date="2026-11-23"/);
+  assert.match(html, /data-log-id="log-&quot;1"/);
+  assert.match(html, /&lt;user&gt;/);
+  assert.match(html, /spam &amp; link/);
+  assert.match(html, /os totais agregados permanecem iguais/);
+});
+
 test("includes zero-token sessions in the period average pace insight", () => {
   const summary = buildPeriodReportSummary({
     modelId: "model",
@@ -877,6 +1205,54 @@ test("renders a focused live report with an optional live comparison", () => {
       peakViewers: 30,
       avgViewers: 12,
       minuteRows: [],
+      capturedEvents: [
+        {
+          timestamp: Date.parse("2026-11-20T14:46:00-03:00"),
+          type: "Ticket show",
+          item: "Ticket show (Início)",
+          showBoundary: "start",
+          ticketPrice: 20,
+        },
+        {
+          timestamp: Date.parse("2026-11-20T14:46:20-03:00"),
+          type: "Participante de show",
+          item: "TicketUser",
+          user: "TicketUser",
+          showParticipantType: "ticket",
+        },
+        {
+          timestamp: Date.parse("2026-11-20T14:46:30-03:00"),
+          type: "Ingresso Ticket",
+          item: "Compra de Ingresso",
+          price: 20,
+        },
+        {
+          timestamp: Date.parse("2026-11-20T14:47:00-03:00"),
+          type: "Ticket show",
+          item: "Ticket show (Fim)",
+          showBoundary: "end",
+        },
+        {
+          timestamp: Date.parse("2026-11-20T14:48:00-03:00"),
+          type: "Show em Grupo",
+          item: "Show em Grupo (Início)",
+          showBoundary: "start",
+          tokens: 15,
+        },
+        {
+          timestamp: Date.parse("2026-11-20T14:48:20-03:00"),
+          type: "Participante de show",
+          item: "GroupUser",
+          user: "GroupUser",
+          showParticipantType: "group",
+        },
+        {
+          timestamp: Date.parse("2026-11-20T14:49:00-03:00"),
+          type: "Show em Grupo",
+          item: "Show em Grupo (Fim)",
+          showBoundary: "end",
+        },
+      ],
     },
     comparisonSession: {
       sessionId: "live-b",
@@ -894,7 +1270,20 @@ test("renders a focused live report with an optional live comparison", () => {
       listedUsersSamples: 2,
       tooltip: "14:45 - 14:49 (5m): 25 tk",
     }],
-    audiencePoints: [],
+    audiencePoints: [
+      {
+        label: "14:45",
+        viewers: 10,
+        leagues: { grey: 3, bronze: 2 },
+        leagueSamples: 1,
+      },
+      {
+        label: "14:50",
+        viewers: 12,
+        leagues: { grey: 4, bronze: 2 },
+        leagueSamples: 1,
+      },
+    ],
     timeStepMin: 5,
   });
 
@@ -908,9 +1297,21 @@ test("renders a focused live report with an optional live comparison", () => {
   assert.match(html, /Ganhos em tokens<\/small>\s*<strong>\+34%/);
   assert.match(html, /A média de 12 espectadores equivaleu a 40% do pico de 30/);
   assert.match(html, /Ganhos por intervalo da live/);
+  assert.match(html, /Shows registrados nesta live/);
+  assert.match(html, /Pico: 30/);
+  assert.match(html, /TicketUser/);
+  assert.match(html, /GroupUser/);
+  assert.match(html, /Ticket show/);
+  assert.match(html, />Grupo<\/text>/);
   assert.match(html, /Fluxo de Tokens \(Blocos de 5 min\)/);
   assert.match(html, /Fluxo de Usuários \(pessoas listadas\)/);
   assert.match(html, /14:45: 8 pessoas listadas \(média\)/);
+  assert.match(html, /📈 Total de listados por liga/);
+  assert.match(html, /Último bloco \(14:50\): 6 listados/);
+  assert.ok(
+    html.indexOf("📈 Total de listados por liga") >
+      html.indexOf("Fluxo de Usuários com Tokens"),
+  );
 });
 
 test("formats durations as non-negative padded clock values", () => {

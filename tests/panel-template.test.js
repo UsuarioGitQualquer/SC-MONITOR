@@ -26,6 +26,11 @@ test("builds the panel shell with supplied dates and saved prices", () => {
   assert.equal((html.match(/class="scm-metric-heading"/g) || []).length, 17);
   assert.equal((html.match(/scm-metric-icon--pink/g) || []).length, 1);
   assert.match(html, /id="scm-session-tokens"/);
+  assert.match(html, /Tokens na live \(gorjetas \+ shows estimados\)/);
+  assert.match(html, /Tempo Bruto \(Live\)/);
+  assert.match(html, /Tempo Líquido \(Live\)/);
+  assert.match(html, />Limpar live<\/button>/);
+  assert.doesNotMatch(html, /Tokens na sessão|Tempo Bruto \(Sessão\)|Tempo Líquido \(Sessão\)|Limpar sessão/i);
   assert.match(html, /data-mode="session"/);
   assert.match(html, /data-mode="day"/);
   assert.doesNotMatch(html, /data-mode="period"|scm-report-period|scm-period-preset/);
@@ -44,6 +49,8 @@ test("builds the panel shell with supplied dates and saved prices", () => {
   assert.match(html, /id="scm-users-audience-step-bar"/);
   assert.match(html, /class="scm-users-audience-step" data-step="auto"/);
   assert.match(html, /class="scm-users-audience-step" data-step="60"[^>]*>1h/);
+  assert.ok(html.indexOf('id="scm-league-legend"') < html.indexOf('id="scm-users-audience-chart"'));
+  assert.ok(html.indexOf('id="scm-users-audience-chart"') < html.indexOf("Lista de Usuários"));
   assert.equal((html.match(/data-resize-corner=/g) || []).length, 4);
   assert.ok(html.indexOf('id="scm-open-reports"') < html.indexOf("Central de Relatórios"));
   assert.match(

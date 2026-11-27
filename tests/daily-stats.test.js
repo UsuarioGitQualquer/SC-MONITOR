@@ -39,8 +39,15 @@ test("renders daily totals, selected flow step, audience retention, and league a
   assert.match(html, /42 espectadores/);
   assert.match(html, /1200 tk/);
   assert.match(html, /Novos: 5 \(2 doadores\)/);
-  assert.match(html, /Retorno: <span[^>]*>38%/);
-  assert.match(html, /🔘4\/2/);
+  assert.match(html, /Retorno: <strong[^>]*>38%/);
+  assert.match(html, /👥 Listados/);
+  assert.match(html, /🪙 Com tokens/);
+  assert.match(html, /min-height:44px/);
+  assert.match(html, /🔘 Cinzas/);
+  assert.match(html, /Pico 4 · Média 2/);
+  assert.match(html, /grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+  assert.match(html, /🟡 Ouro/);
+  assert.match(html, /Pico 0 · Média 0/);
   assert.match(html, /<svg>flow<\/svg>/);
 });
 

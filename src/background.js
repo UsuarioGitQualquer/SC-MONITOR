@@ -1015,6 +1015,273 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type !== "SCM_DELETE_MODERATION_LOG") return false;
+  const isStripchatContentScript = sender.id === chrome.runtime.id &&
+    Number.isInteger(sender.tab?.id) &&
+    isStripchatPage(sender.tab?.url || "");
+  if (!isReportsPage(sender) && !isStripchatContentScript) {
+    sendResponse({ ok: false, error: "Solicitação não autorizada." });
+    return false;
+  }
+
+  const modelId = String(message.modelId || "").trim();
+  const dateKey = String(message.dateKey || "").trim();
+  const logId = String(message.logId || "").trim();
+  if (!modelId || modelId.length > 512 || !logId || logId.length > 512) {
+    sendResponse({ ok: false, error: "Modelo ou registro inválido." });
+    return false;
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+    sendResponse({ ok: false, error: "Data inválida." });
+    return false;
+  }
+
+  (async () => {
+    if (isStripchatContentScript) {
+      const status = await sendTabMessage(sender.tab.id, { type: "SCM_GET_STATUS" });
+      if (!status?.ok || String(status.modelId || "") !== modelId) {
+        throw new Error("O modelo solicitado não corresponde a esta sala.");
+      }
+    }
+
+    const dailyKey = `scm:model:${modelId}:daily:${dateKey}`;
+    const snapshotKey = `scm:model:${modelId}`;
+    const data = await getStorageData([dailyKey, snapshotKey]);
+    const daily = data[dailyKey];
+    if (!daily || typeof daily !== "object") {
+      throw new Error("Os dados deste dia não estão mais disponíveis.");
+    }
+    const snapshot = data[snapshotKey];
+    const snapshotBucket = snapshot?.dailyBuckets?.[dateKey];
+    const getLogList = (collection) => Array.isArray(collection)
+      ? collection
+      : Object.values(collection || {});
+    const foundInDaily = getLogList(daily.moderationLogs).some(
+      (log) => String(log?.id || "") === logId,
+    );
+    const foundInSnapshot = getLogList(snapshotBucket?.moderationLogs).some(
+      (log) => String(log?.id || "") === logId,
+    );
+    if (!foundInDaily && !foundInSnapshot) {
+      throw new Error("O registro mudou ou já foi removido. Atualize o relatório.");
+    }
+
+    const deletedIds = Array.from(new Set([
+      ...(Array.isArray(daily.moderationLogDeletedIds)
+        ? daily.moderationLogDeletedIds
+        : []),
+      logId,
+    ].map((id) => String(id))));
+    const updatedDaily = {
+      ...daily,
+      moderationLogs: filterTimelineCollection(
+        daily.moderationLogs,
+        (log) => String(log?.id || "") === logId,
+      ),
+      moderationLogDeletedIds: deletedIds,
+    };
+    let updatedSnapshot = snapshot;
+    if (snapshot && typeof snapshot === "object") {
+      const dailyBuckets = snapshot.dailyBuckets &&
+        typeof snapshot.dailyBuckets === "object"
+        ? { ...snapshot.dailyBuckets }
+        : {};
+      if (snapshotBucket && typeof snapshotBucket === "object") {
+        const bucketDeletedIds = Array.from(new Set([
+          ...(Array.isArray(snapshotBucket.moderationLogDeletedIds)
+            ? snapshotBucket.moderationLogDeletedIds
+            : []),
+          logId,
+        ].map((id) => String(id))));
+        dailyBuckets[dateKey] = {
+          ...snapshotBucket,
+          moderationLogs: filterTimelineCollection(
+            snapshotBucket.moderationLogs,
+            (log) => String(log?.id || "") === logId,
+          ),
+          moderationLogDeletedIds: bucketDeletedIds,
+        };
+      }
+      updatedSnapshot = {
+        ...snapshot,
+        moderationLogs: filterTimelineCollection(
+          snapshot.moderationLogs,
+          (log) => String(log?.id || "") === logId,
+        ),
+        dailyBuckets,
+      };
+    }
+
+    const updatedValues = { [dailyKey]: updatedDaily };
+    if (updatedSnapshot && typeof updatedSnapshot === "object") {
+      updatedValues[snapshotKey] = updatedSnapshot;
+    }
+    await setStorageData(updatedValues);
+    notifyStorageChanged([dailyKey, snapshotKey]);
+
+    let warning = "";
+    try {
+      const tabs = await queryStripchatTabs();
+      const results = await Promise.all(tabs.map(async (tab) => {
+        try {
+          const result = await sendTabMessage(tab.id, {
+            type: "SCM_MODERATION_LOG_DELETED",
+            modelId,
+            dateKey,
+            logId,
+          });
+          return result?.ok === true || result?.ignored === true;
+        } catch (error) {
+          console.warn(
+            `[SC Monitor] Não foi possível sincronizar a exclusão na aba ${tab.id}:`,
+            error,
+          );
+          return false;
+        }
+      }));
+      if (results.some((result) => !result)) {
+        warning = " Algumas abas abertas não puderam ser sincronizadas.";
+      }
+    } catch (error) {
+      console.warn("[SC Monitor] Não foi possível sincronizar a exclusão nas abas abertas:", error);
+      warning = " As abas abertas podem precisar ser atualizadas.";
+    }
+    sendResponse({ ok: true, warning });
+  })().catch((error) => {
+    sendResponse({ ok: false, error: error.message });
+  });
+
+  return true;
+});
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type !== "SCM_DELETE_MUTED_USER_RECORDS") return false;
+  if (!isReportsPage(sender)) {
+    sendResponse({ ok: false, error: "Solicitação não autorizada." });
+    return false;
+  }
+
+  const username = String(message.username || "").trim();
+  const dailyRecords = Array.isArray(message.dailyRecords) ? message.dailyRecords : [];
+  if (!username || username.length > 512 || dailyRecords.length === 0 || dailyRecords.length > 10000) {
+    sendResponse({ ok: false, error: "Usuário ou período inválido." });
+    return false;
+  }
+
+  const normalizedUsername = username.toLocaleLowerCase();
+  const records = [];
+  const seenRecords = new Set();
+  for (const record of dailyRecords) {
+    const modelId = String(record?.modelId || "").trim();
+    const dateKey = String(record?.dateKey || "").trim();
+    if (
+      !modelId ||
+      modelId.length > 512 ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(dateKey)
+    ) {
+      sendResponse({ ok: false, error: "Modelo ou data inválida." });
+      return false;
+    }
+    const recordKey = `${modelId}\u0000${dateKey}`;
+    if (!seenRecords.has(recordKey)) {
+      seenRecords.add(recordKey);
+      records.push({ modelId, dateKey });
+    }
+  }
+
+  (async () => {
+    const storageKeys = Array.from(new Set(records.flatMap(({ modelId, dateKey }) => [
+      `scm:model:${modelId}:daily:${dateKey}`,
+      `scm:model:${modelId}`,
+    ])));
+    const data = await getStorageData(storageKeys);
+    const updatedValues = {};
+    const snapshots = new Map();
+    let removedDates = 0;
+
+    records.forEach(({ modelId, dateKey }) => {
+      const dailyKey = `scm:model:${modelId}:daily:${dateKey}`;
+      const snapshotKey = `scm:model:${modelId}`;
+      const daily = data[dailyKey] && typeof data[dailyKey] === "object"
+        ? data[dailyKey]
+        : {};
+      const snapshot = data[snapshotKey];
+      const snapshotBucket = snapshot?.dailyBuckets?.[dateKey];
+      const getMutedUsers = (bucket) => Array.isArray(bucket?.mutedUsers)
+        ? bucket.mutedUsers
+        : Object.values(bucket?.mutedUsers || {});
+      const matchesUsername = (user) =>
+        String(user?.username || "").trim().toLocaleLowerCase() === normalizedUsername;
+      const dailyUsers = getMutedUsers(daily).filter(matchesUsername);
+      const snapshotUsers = getMutedUsers(snapshotBucket).filter(matchesUsername);
+      if (dailyUsers.length === 0 && snapshotUsers.length === 0) return;
+
+      removedDates += 1;
+      const deletedIds = Array.from(new Set([
+        ...(Array.isArray(daily.mutedUserDeletedIds)
+          ? daily.mutedUserDeletedIds
+          : []),
+        ...dailyUsers,
+        ...snapshotUsers,
+      ].map((userOrId) => {
+        if (typeof userOrId === "string") return userOrId;
+        const name = String(userOrId?.username || "").trim().toLocaleLowerCase();
+        const timestamp = Number(userOrId?.timestamp ?? userOrId?._timestamp) || 0;
+        return `${name}|${timestamp}`;
+      })));
+      updatedValues[dailyKey] = {
+        ...daily,
+        mutedUserDeletedIds: deletedIds,
+      };
+
+      if (snapshot && typeof snapshot === "object") {
+        let updatedSnapshot = snapshots.get(modelId);
+        if (!updatedSnapshot) {
+          updatedSnapshot = {
+            ...snapshot,
+            dailyBuckets: { ...(snapshot.dailyBuckets || {}) },
+          };
+        }
+        const bucket = updatedSnapshot.dailyBuckets[dateKey] || snapshotBucket || {};
+        const bucketDeletedIds = Array.from(new Set([
+          ...(Array.isArray(bucket.mutedUserDeletedIds)
+            ? bucket.mutedUserDeletedIds
+            : []),
+          ...dailyUsers,
+          ...snapshotUsers,
+        ].map((userOrId) => {
+          if (typeof userOrId === "string") return userOrId;
+          const name = String(userOrId?.username || "").trim().toLocaleLowerCase();
+          const timestamp = Number(userOrId?.timestamp ?? userOrId?._timestamp) || 0;
+          return `${name}|${timestamp}`;
+        })));
+        updatedSnapshot.dailyBuckets[dateKey] = {
+          ...bucket,
+          mutedUserDeletedIds: bucketDeletedIds,
+        };
+        snapshots.set(modelId, updatedSnapshot);
+      }
+    });
+
+    if (removedDates === 0) {
+      throw new Error("Os registros deste usuário não estão mais disponíveis no período.");
+    }
+
+    snapshots.forEach((snapshot, modelId) => {
+      updatedValues[`scm:model:${modelId}`] = snapshot;
+    });
+    const changedKeys = Object.keys(updatedValues);
+    await setStorageData(updatedValues);
+    notifyStorageChanged(changedKeys);
+    sendResponse({ ok: true, removedDates });
+  })().catch((error) => {
+    sendResponse({ ok: false, error: error.message });
+  });
+
+  return true;
+});
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type !== "SCM_DISMISS_SUSPECT_BOT") return false;
   if (!isReportsPage(sender)) {
     sendResponse({ ok: false, error: "Solicitação não autorizada." });

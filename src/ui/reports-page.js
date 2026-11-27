@@ -19,6 +19,7 @@ import {
 import { getAdaptiveTimeStep } from "./chart-data.js";
 import {
   buildDailyReportChartData,
+  buildDailyShowStats,
   buildPeriodReportSummary,
   buildReportData,
   dateKeyToUtcDate,
@@ -37,6 +38,13 @@ import {
   buildSessionReportHtml,
   formatReportDuration,
 } from "./reports-view.js";
+import {
+  normalizeReportViewState,
+  REPORT_VIEW_STATE_KEY,
+  resolveReportDateSelection,
+} from "./report-view-state.js";
+import { canRestoreManualEntryDraft } from "./manual-entry-draft.js";
+import { removeManualEntryFromDaily } from "./manual-entry-storage.js";
 
 const elements = {
   appShell: document.querySelector(".app-shell"),
@@ -78,6 +86,8 @@ const elements = {
   backupStatus: document.getElementById("backup-status"),
   deleteReportModel: document.getElementById("delete-report-model"),
   deleteReportScope: document.getElementById("delete-report-scope"),
+  deleteReportDateControl: document.getElementById("delete-report-date-control"),
+  deleteReportDate: document.getElementById("delete-report-date"),
   deleteReportLiveControl: document.getElementById("delete-report-live-control"),
   deleteReportLive: document.getElementById("delete-report-live"),
   deleteReportData: document.getElementById("delete-report-data"),
@@ -92,6 +102,7 @@ let pendingBackupImport = null;
 let selectedSessionAId = "";
 let selectedSessionBId = "";
 let sessionComparisonCleared = false;
+let manualEntryDraft = null;
 
 function readStorage(keys) {
   return new Promise((resolve, reject) => {
@@ -120,6 +131,241 @@ function writeStorage(values) {
       } else resolve();
     });
   });
+}
+
+function updateManualEntryForm(form) {
+  const kind = form.querySelector('[name="kind"]')?.value || "chat_private";
+  const scope = form.querySelector('[name="scope"]')?.value || "day";
+  const showControl = form.querySelector("[data-manual-show-control]");
+  const showSelect = form.querySelector('[name="showId"]');
+  if (!showControl || !showSelect) return;
+
+  showControl.hidden = kind === "chat_private";
+  Array.from(showSelect.options).forEach((option) => {
+    if (!option.value) return;
+    const visible = option.dataset.showScope === scope &&
+      option.dataset.showType === kind;
+    option.hidden = !visible;
+    option.disabled = !visible;
+  });
+  if (showSelect.selectedOptions[0]?.hidden) showSelect.value = "";
+}
+
+function getManualEntryDraftContext() {
+  return {
+    modelId: elements.model.value,
+    dateKey: elements.dateA.value,
+    mode: elements.mode.value,
+    sessionId: selectedSessionAId,
+  };
+}
+
+function captureManualEntryDraft(form) {
+  manualEntryDraft = {
+    ...getManualEntryDraftContext(),
+    scope: form.querySelector('[name="scope"]')?.value || "day",
+    kind: form.querySelector('[name="kind"]')?.value || "chat_private",
+    amount: form.querySelector('[name="amount"]')?.value || "",
+    username: form.querySelector('[name="username"]')?.value || "",
+    showId: form.querySelector('[name="showId"]')?.value || "",
+  };
+}
+
+function restoreManualEntryDraft(form) {
+  if (!canRestoreManualEntryDraft(manualEntryDraft, getManualEntryDraftContext())) {
+    manualEntryDraft = null;
+    return;
+  }
+
+  const scopeSelect = form.querySelector('[name="scope"]');
+  const kindSelect = form.querySelector('[name="kind"]');
+  const amountInput = form.querySelector('[name="amount"]');
+  const usernameInput = form.querySelector('[name="username"]');
+  const showSelect = form.querySelector('[name="showId"]');
+  const availableScope = Array.from(scopeSelect?.options || []).find(
+    (option) => option.value === manualEntryDraft.scope && !option.disabled,
+  );
+  if (!availableScope) {
+    manualEntryDraft = null;
+    return;
+  }
+
+  scopeSelect.value = manualEntryDraft.scope;
+  kindSelect.value = manualEntryDraft.kind;
+  updateManualEntryForm(form);
+  if (amountInput) amountInput.value = manualEntryDraft.amount;
+  if (usernameInput) usernameInput.value = manualEntryDraft.username;
+  if (showSelect) {
+    const availableShow = Array.from(showSelect.options).some(
+      (option) => option.value === manualEntryDraft.showId && !option.disabled && !option.hidden,
+    );
+    showSelect.value = availableShow ? manualEntryDraft.showId : "";
+    if (manualEntryDraft.showId && !availableShow) {
+      const status = form.querySelector("[data-manual-entry-status]");
+      if (status) status.textContent = "O show selecionado não está mais disponível; escolha outro.";
+    }
+  }
+}
+
+function setWorkspaceHtml(html) {
+  const activeField = document.activeElement?.closest?.("[data-manual-entry-form]")
+    ? document.activeElement
+    : null;
+  const activeFieldName = activeField?.getAttribute("name") || "";
+  const selectionStart = activeField instanceof HTMLInputElement &&
+    activeField.type === "text"
+    ? activeField.selectionStart
+    : null;
+  const selectionEnd = activeField instanceof HTMLInputElement &&
+    activeField.type === "text"
+    ? activeField.selectionEnd
+    : null;
+  elements.workspace.innerHTML = html;
+  const manualEntryForm = elements.workspace.querySelector("[data-manual-entry-form]");
+  if (!manualEntryForm) return;
+  restoreManualEntryDraft(manualEntryForm);
+  if (
+    activeFieldName &&
+    canRestoreManualEntryDraft(manualEntryDraft, getManualEntryDraftContext())
+  ) {
+    const restoredField = Array.from(manualEntryForm.elements)
+      .find((field) => field.name === activeFieldName);
+    restoredField?.focus();
+    if (
+      restoredField instanceof HTMLInputElement &&
+      restoredField.type === "text" &&
+      selectionStart !== null &&
+      selectionEnd !== null
+    ) {
+      restoredField.setSelectionRange(selectionStart, selectionEnd);
+    }
+  }
+}
+
+function getCapturedEvents(daily) {
+  if (Array.isArray(daily?.capturedEvents)) return daily.capturedEvents;
+  if (daily?.capturedEvents && typeof daily.capturedEvents === "object") {
+    return Object.values(daily.capturedEvents);
+  }
+  return [];
+}
+
+function getManualEarningEvents(daily) {
+  const storedManual = Array.isArray(daily?.manualEarnings)
+    ? daily.manualEarnings
+    : daily?.manualEarnings && typeof daily.manualEarnings === "object"
+      ? Object.values(daily.manualEarnings)
+      : [];
+  const legacyManual = getCapturedEvents(daily).filter((event) => event?.manualEntry === true);
+  const entries = new Map();
+  [...storedManual, ...legacyManual].forEach((event, index) => {
+    if (!event || typeof event !== "object") return;
+    const id = String(event.id || `manual-${index}`);
+    if (!entries.has(id)) entries.set(id, event);
+  });
+  return Array.from(entries.values());
+}
+
+async function saveManualEarning(form) {
+  const modelId = elements.model.value;
+  const dateKey = elements.dateA.value;
+  const scope = form.querySelector('[name="scope"]')?.value;
+  const kind = form.querySelector('[name="kind"]')?.value;
+  const amount = Number(form.querySelector('[name="amount"]')?.value);
+  const username = String(form.querySelector('[name="username"]')?.value || "")
+    .trim()
+    .slice(0, 64);
+  const showId = form.querySelector('[name="showId"]')?.value || "";
+  const entryType = {
+    chat_private: "Chat privado",
+    private: "Show privado",
+    exclusive: "Show exclusivo",
+  }[kind];
+
+  if (!modelId || !dateKey) throw new Error("Selecione uma modelo e um dia.");
+  if (!entryType) throw new Error("Selecione um tipo de ganho válido.");
+  if (!Number.isInteger(amount) || amount <= 0) {
+    throw new Error("Informe um valor inteiro de tokens maior que zero.");
+  }
+
+  const sessionId = scope === "live" ? selectedSessionAId : "";
+  if (scope !== "day" && scope !== "live") throw new Error("Selecione Dia ou Live.");
+  if (scope === "live" && !sessionId) {
+    throw new Error("Selecione uma live antes de registrar o ganho.");
+  }
+
+  const storageKey = `scm:model:${modelId}:daily:${dateKey}`;
+  const stored = await readStorage([storageKey]);
+  const daily = stored[storageKey] && typeof stored[storageKey] === "object"
+    ? { ...stored[storageKey] }
+    : { modelId, date: dateKey };
+  const capturedEvents = getCapturedEvents(daily);
+  let targetSession = null;
+  if (scope === "live") {
+    const sessions = Object.values(daily.liveSessions || {});
+    targetSession = daily.liveSessions?.[sessionId] ||
+      sessions.find((session) => String(session?.sessionId || "") === sessionId);
+    if (!targetSession) throw new Error("A live selecionada não foi encontrada no armazenamento.");
+  }
+
+  if (kind !== "chat_private" && showId) {
+    const targetEvents = scope === "day"
+      ? [...capturedEvents, ...getManualEarningEvents(daily)]
+      : [
+        ...getCapturedEvents(targetSession),
+        ...getManualEarningEvents(daily).filter((event) =>
+          event?.manualEntry === true &&
+          event.scope === "live" &&
+          String(event.sessionId || "") === sessionId,
+        ),
+      ];
+    const targetStats = buildDailyShowStats({ capturedEvents: targetEvents });
+    const shows = kind === "private"
+      ? targetStats.private.privateShows
+      : targetStats.exclusive.exclusiveShows;
+    if (!shows.some((show) => show.id === showId)) {
+      throw new Error("O show selecionado não está mais disponível. Atualize o relatório.");
+    }
+  }
+
+  let timestamp = Date.now();
+  if (scope === "live") {
+    const endedAt = Number(targetSession.endedAtTs) || 0;
+    const startedAt = Number(targetSession.startedAtTs) || 0;
+    if (endedAt > 0) timestamp = endedAt;
+    if (startedAt > 0) timestamp = Math.max(timestamp, startedAt);
+  } else if (dateKey !== localDateKey()) {
+    const selectedDayTimestamp = new Date(`${dateKey}T12:00:00`).getTime();
+    if (Number.isFinite(selectedDayTimestamp)) timestamp = selectedDayTimestamp;
+  }
+  const entryId = `manual-${timestamp}-${Math.random().toString(36).slice(2, 10)}`;
+  const showLabel = kind === "private" ? "Show privado" : "Show exclusivo";
+  const entry = {
+    id: entryId,
+    timestamp,
+    time: timestamp,
+    type: entryType,
+    item: kind === "chat_private"
+      ? "Ganho manual de chat privado"
+      : `${showLabel} · ganho manual`,
+    price: amount,
+    tokens: amount,
+    manualAmount: amount,
+    manualEntry: true,
+    user: username,
+    scope,
+    ...(sessionId ? { sessionId } : {}),
+    ...(showId ? { manualShowTargetId: showId } : {}),
+    ...(!showId && kind !== "chat_private"
+      ? { showBoundary: "start", manualNewShow: true }
+      : {}),
+  };
+
+  daily.modelId = modelId;
+  daily.date = dateKey;
+  daily.manualEarnings = [...getManualEarningEvents(daily), entry];
+  await writeStorage({ [storageKey]: daily });
+  return { amount, entryType };
 }
 
 function sendDismissSuspectRequest(modelId, username) {
@@ -184,7 +430,7 @@ function refreshLocalStorageSummary(modelBytes = null) {
 }
 
 function emptyState(message) {
-  elements.workspace.innerHTML = buildReportEmptyState(message);
+  setWorkspaceHtml(buildReportEmptyState(message));
 }
 
 function entriesForModel(modelId) {
@@ -198,9 +444,15 @@ function appendOption(select, value, label) {
   select.append(option);
 }
 
-function populateModelOptions() {
+function setSelectValueIfAvailable(select, value) {
+  if (value && Array.from(select.options).some((option) => option.value === value)) {
+    select.value = value;
+  }
+}
+
+function populateModelOptions(preferredModelId = "") {
   const modelOptions = listHistoryModels(historyData);
-  const previousModelId = elements.model.value;
+  const previousModelId = elements.model.value || preferredModelId;
   elements.model.replaceChildren();
   modelOptions.forEach(({ modelId, label }) =>
     appendOption(elements.model, modelId, label),
@@ -230,25 +482,29 @@ function populateModelOptions() {
   }
 }
 
-function populateDateOptions({ resetMainToPreferred = false } = {}) {
-  const entries = entriesForModel(elements.model.value);
-  const dates = Array.from(new Map(entries.map((entry) => [entry.dateKey, entry])).values())
-    .sort((a, b) => b.dateKey.localeCompare(a.dateKey));
+function populateDateOptions({
+  resetMainToPreferred = false,
+  preferredDateA = "",
+  preferredDateB = "",
+} = {}) {
+  const dates = historyDatesForModel(elements.model.value);
   const previousDateA = elements.dateA.value;
   const previousDateB = elements.dateB.value;
   const currentDateKey = localDateKey();
   const preferredDateKey = dates.some((entry) => entry.dateKey === currentDateKey)
     ? currentDateKey
     : dates[0]?.dateKey || "";
+  const dateKeys = dates.map((entry) => entry.dateKey);
 
   elements.dateA.replaceChildren();
   dates.forEach((entry) =>
     appendOption(elements.dateA, entry.dateKey, formatHistoryDate(entry)),
   );
-  elements.dateA.value = !resetMainToPreferred &&
-    dates.some((entry) => entry.dateKey === previousDateA)
-    ? previousDateA
-    : preferredDateKey;
+  elements.dateA.value = resolveReportDateSelection(
+    dateKeys,
+    resetMainToPreferred ? "" : previousDateA || preferredDateA,
+    preferredDateKey,
+  );
 
   elements.dateB.replaceChildren();
   appendOption(elements.dateB, "", "Sem comparação");
@@ -257,10 +513,40 @@ function populateDateOptions({ resetMainToPreferred = false } = {}) {
     .forEach((entry) =>
       appendOption(elements.dateB, entry.dateKey, formatHistoryDate(entry)),
     );
+  const requestedDateB = previousDateB || preferredDateB;
   elements.dateB.value = dates.some(
-    (entry) => entry.dateKey === previousDateB && entry.dateKey !== elements.dateA.value,
+    (entry) => entry.dateKey === requestedDateB && entry.dateKey !== elements.dateA.value,
   )
-    ? previousDateB
+    ? requestedDateB
+    : "";
+}
+
+function historyDatesForModel(modelId) {
+  return Array.from(
+    new Map(entriesForModel(modelId).map((entry) => [entry.dateKey, entry])).values(),
+  ).sort((a, b) => b.dateKey.localeCompare(a.dateKey));
+}
+
+function populateDeleteDateOptions({ resetSelection = false } = {}) {
+  const previousDate = resetSelection ? "" : elements.deleteReportDate.value;
+  const dates = historyDatesForModel(elements.deleteReportModel.value);
+  elements.deleteReportDate.replaceChildren();
+  appendOption(
+    elements.deleteReportDate,
+    "",
+    dates.length ? "Selecione uma data" : "Nenhuma data disponível",
+  );
+  dates.forEach((entry) =>
+    appendOption(
+      elements.deleteReportDate,
+      entry.dateKey,
+      formatHistoryDate({ lastDate: entry.dateKey }),
+    ),
+  );
+  elements.deleteReportDate.value = dates.some(
+    (entry) => entry.dateKey === previousDate,
+  )
+    ? previousDate
     : "";
 }
 
@@ -385,7 +671,7 @@ async function renderDayReport(modelId) {
   if (elements.mode.value === "session") {
     if (!selectedSession) {
       currentReport = null;
-      elements.workspace.innerHTML = buildReportEmptyState("Não há lives registradas para esta data.");
+      setWorkspaceHtml(buildReportEmptyState("Não há lives registradas para esta data."));
       setStatus(`${report.modelName} · ${report.dateBr} · sem lives registradas`);
       return;
     }
@@ -404,15 +690,18 @@ async function renderDayReport(modelId) {
       sessionId: selectedSession.sessionId,
     });
 
-    elements.workspace.innerHTML = buildSessionReportHtml({
+    setWorkspaceHtml(buildSessionReportHtml({
       dateBr: report.dateBr,
+      dateKey: report.dateKey,
+      modelId: report.modelId,
       modelName: report.modelName,
       session: selectedSession,
+      dayShowStats: report.showStats,
       comparisonSession,
       timeBars: chartData.timeBars,
       timeStepMin,
       audiencePoints: chartData.audiencePoints,
-    });
+    }));
     currentReport = { mode: "day", report };
     const liveIndex = report.liveSessions.indexOf(selectedSession) + 1;
     setStatus(`${report.modelName} · ${report.dateBr} · Live ${liveIndex}`);
@@ -448,7 +737,7 @@ async function renderDayReport(modelId) {
     })
     : null;
 
-  elements.workspace.innerHTML = buildDailyReportHtml({
+  setWorkspaceHtml(buildDailyReportHtml({
     report,
     daily: dailyA,
     comparisonReport,
@@ -460,7 +749,7 @@ async function renderDayReport(modelId) {
     audiencePoints: chartData.audiencePoints,
     sessionComparison: { sessionA: selectedSession, sessionB: comparisonSession },
     enableSuspectRemoval: true,
-  });
+  }));
   currentReport = { mode: "day", report };
   setStatus(`${report.modelName} · ${report.dateBr}`);
 }
@@ -536,10 +825,12 @@ async function renderPeriodReport(modelId) {
     })
     : null;
 
-  elements.workspace.innerHTML = buildPeriodReportHtml(summary, {
+  setWorkspaceHtml(buildPeriodReportHtml(summary, {
     enableSuspectRemoval: true,
+    enableMutedRemoval: true,
+    enableModerationRemoval: true,
     comparisonSummary,
-  });
+  }));
   currentReport = { mode: "period", summary, comparisonSummary };
   setStatus(
     comparePeriods
@@ -549,6 +840,13 @@ async function renderPeriodReport(modelId) {
 }
 
 async function renderSelectedReport() {
+  if (
+    manualEntryDraft &&
+    !canRestoreManualEntryDraft(manualEntryDraft, getManualEntryDraftContext())
+  ) {
+    manualEntryDraft = null;
+  }
+  await persistReportViewState();
   const modelId = elements.model.value;
   const hasModels = elements.model.options.length > 0;
   const isPeriod = elements.mode.value === "period";
@@ -574,13 +872,52 @@ async function renderSelectedReport() {
   }
 }
 
+async function persistReportViewState() {
+  await writeStorage({
+    [REPORT_VIEW_STATE_KEY]: {
+      mode: elements.mode.value,
+      modelId: elements.model.value,
+      dateA: elements.dateA.value,
+      dateB: elements.dateB.value,
+      sessionA: elements.sessionA.value || selectedSessionAId,
+      sessionB: elements.sessionB.value || selectedSessionBId,
+      sessionComparisonCleared,
+      timeGranularity: elements.timeGranularity.value,
+      periodStart: elements.periodStart.value,
+      periodEnd: elements.periodEnd.value,
+      periodGranularity: elements.periodGranularity.value,
+      comparePeriods: elements.comparePeriods.checked,
+      periodComparisonStart: elements.periodComparisonStart.value,
+      periodComparisonEnd: elements.periodComparisonEnd.value,
+    },
+  });
+}
+
 async function loadAndRender() {
   setStatus("Carregando dados salvos…");
   try {
-    const result = await readStorage(["scm_rooms_history"]);
+    const result = await readStorage(["scm_rooms_history", REPORT_VIEW_STATE_KEY]);
     historyData = result.scm_rooms_history || {};
-    populateModelOptions();
-    populateDateOptions({ resetMainToPreferred: true });
+    const viewState = normalizeReportViewState(result[REPORT_VIEW_STATE_KEY]);
+    setSelectValueIfAvailable(elements.mode, viewState.mode);
+    setSelectValueIfAvailable(elements.timeGranularity, viewState.timeGranularity);
+    setSelectValueIfAvailable(elements.periodGranularity, viewState.periodGranularity);
+    elements.comparePeriods.checked = viewState.comparePeriods;
+    if (viewState.periodStart && viewState.periodEnd) {
+      elements.periodStart.value = viewState.periodStart;
+      elements.periodEnd.value = viewState.periodEnd;
+    }
+    elements.periodComparisonStart.value = viewState.periodComparisonStart;
+    elements.periodComparisonEnd.value = viewState.periodComparisonEnd;
+    selectedSessionAId = viewState.sessionA;
+    selectedSessionBId = viewState.sessionB;
+    sessionComparisonCleared = viewState.sessionComparisonCleared;
+    populateModelOptions(viewState.modelId);
+    populateDateOptions({
+      preferredDateA: viewState.dateA,
+      preferredDateB: viewState.dateB,
+    });
+    populateDeleteDateOptions();
     setDefaultPeriod();
     refreshLocalStorageSummary();
     await renderSelectedReport();
@@ -860,19 +1197,31 @@ function setDeleteReportStatus(message, isError = false) {
 }
 
 function updateDeleteReportScope() {
-  const isLive = elements.deleteReportScope.value === "live";
+  const scope = elements.deleteReportScope.value;
+  const needsDate = scope === "day" || scope === "live";
+  const isLive = scope === "live";
+  elements.deleteReportDateControl.hidden = !needsDate;
   elements.deleteReportLiveControl.hidden = !isLive;
 }
 
-async function refreshDeleteLiveOptions() {
+async function refreshDeleteLiveOptions({ resetSelection = false } = {}) {
   const modelId = elements.deleteReportModel.value;
-  const dateKey = elements.dateA.value;
-  const previousLiveId = elements.deleteReportLive.value || selectedSessionAId;
+  const dateKey = elements.deleteReportDate.value;
+  const previousLiveId = resetSelection ? "" : elements.deleteReportLive.value;
   elements.deleteReportLive.replaceChildren();
+  appendOption(
+    elements.deleteReportLive,
+    "",
+    dateKey ? "Selecione uma live" : "Selecione uma data primeiro",
+  );
   if (!modelId || !dateKey) return;
 
   const dailyKey = `scm:model:${modelId}:daily:${dateKey}`;
   const data = await readStorage([dailyKey]);
+  if (
+    elements.deleteReportModel.value !== modelId ||
+    elements.deleteReportDate.value !== dateKey
+  ) return;
   const sessions = Object.entries(data[dailyKey]?.liveSessions || {})
     .filter(([, session]) => session && typeof session === "object")
     .sort(([, a], [, b]) =>
@@ -887,8 +1236,8 @@ async function refreshDeleteLiveOptions() {
   });
   if (sessions.some(([sessionId]) => sessionId === previousLiveId)) {
     elements.deleteReportLive.value = previousLiveId;
-  } else if (sessions.length > 0) {
-    elements.deleteReportLive.selectedIndex = 0;
+  } else if (!sessions.length) {
+    elements.deleteReportLive.options[0].textContent = "Nenhuma live registrada nesta data";
   }
 }
 
@@ -932,8 +1281,55 @@ function sendDeleteTimelineEntry(entry) {
   });
 }
 
+function sendDeleteModerationLog(entry) {
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage(
+      { type: "SCM_DELETE_MODERATION_LOG", ...entry },
+      (response) => {
+        const error = chrome.runtime.lastError;
+        if (error) {
+          reject(new Error(error.message));
+          return;
+        }
+        if (!response?.ok) {
+          reject(new Error(response?.error || "Não foi possível apagar o registro."));
+          return;
+        }
+        resolve(response);
+      },
+    );
+  });
+}
+
+function sendDeleteMutedUserRecords(entry) {
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage(
+      { type: "SCM_DELETE_MUTED_USER_RECORDS", ...entry },
+      (response) => {
+        const error = chrome.runtime.lastError;
+        if (error) {
+          reject(new Error(error.message));
+          return;
+        }
+        if (!response?.ok) {
+          reject(new Error(response?.error || "Não foi possível apagar os registros."));
+          return;
+        }
+        resolve(response);
+      },
+    );
+  });
+}
+
 function setTimelineDeleteStatus(message, isError = false) {
   const status = elements.workspace.querySelector(".timeline-delete-status");
+  if (!status) return;
+  status.textContent = message;
+  status.classList.toggle("error", isError);
+}
+
+function setMutedDeleteStatus(message, isError = false) {
+  const status = elements.workspace.querySelector(".muted-delete-status");
   if (!status) return;
   status.textContent = message;
   status.classList.toggle("error", isError);
@@ -981,6 +1377,106 @@ async function deleteTimelineEntry(button) {
   }
 }
 
+async function deleteManualEntry(button) {
+  const modelId = button.dataset.modelId || "";
+  const dateKey = button.dataset.entryDate || "";
+  const entryId = button.dataset.entryId || "";
+  if (!modelId || !dateKey || !entryId) {
+    setStatus("Não foi possível identificar o ganho manual para apagar.", true);
+    return;
+  }
+  if (!confirm(`Apagar este ganho manual de ${dateKey}? Os totais do relatório serão atualizados.`)) {
+    return;
+  }
+
+  button.disabled = true;
+  setStatus("Apagando ganho manual…");
+  try {
+    const storageKey = `scm:model:${modelId}:daily:${dateKey}`;
+    const stored = await readStorage([storageKey]);
+    const daily = stored[storageKey];
+    if (!daily || typeof daily !== "object") {
+      throw new Error("O relatório selecionado não foi encontrado no armazenamento.");
+    }
+
+    const result = removeManualEntryFromDaily(daily, entryId);
+    if (!result.removed) {
+      throw new Error("O ganho manual não foi encontrado; atualize o relatório.");
+    }
+    await writeStorage({ [storageKey]: result.daily });
+    await renderSelectedReport();
+    setStatus("Ganho manual apagado e totais atualizados.");
+  } catch (error) {
+    setStatus(`Falha ao apagar o ganho manual: ${error.message}`, true);
+    button.disabled = false;
+  }
+}
+
+async function deleteModerationLog(button) {
+  const entry = {
+    modelId: button.dataset.modelId || "",
+    dateKey: button.dataset.entryDate || "",
+    logId: button.dataset.logId || "",
+  };
+  const username = button.dataset.logUser || "registro de moderação";
+  if (!confirm(`Apagar o registro de "${username}" em ${entry.dateKey}? Ele será removido da lista; os totais agregados não serão alterados.`)) {
+    return;
+  }
+
+  button.disabled = true;
+  setTimelineDeleteStatus("Apagando registro de moderação…");
+  try {
+    const result = await sendDeleteModerationLog(entry);
+    await renderSelectedReport();
+    setTimelineDeleteStatus(
+      `Registro removido; os totais foram mantidos.${result.warning || ""}`,
+    );
+  } catch (error) {
+    setTimelineDeleteStatus(`Falha ao apagar: ${error.message}`, true);
+    button.disabled = false;
+  }
+}
+
+async function deleteMutedUserRecords(button) {
+  const modelId = button.dataset.modelId || "";
+  const username = button.dataset.username || "";
+  const start = button.dataset.startDate || "";
+  const end = button.dataset.endDate || "";
+  if (!currentReport || currentReport.mode !== "period") return;
+
+  const dateKeys = listPeriodReportDateKeys(start, end);
+  const entriesByDate = new Map(
+    entriesForModel(modelId).map((entry) => [entry.dateKey, entry]),
+  );
+  const dailyRecords = dateKeys.flatMap((dateKey) => {
+    const entry = entriesByDate.get(dateKey);
+    const modelIds = entry?.modelIds?.length
+      ? entry.modelIds
+      : [entry?.modelId || modelId];
+    return modelIds.map((id) => ({ modelId: id, dateKey }));
+  });
+  if (!username || dailyRecords.length === 0) {
+    setMutedDeleteStatus("Não foi possível identificar os registros deste período.", true);
+    return;
+  }
+  if (!confirm(`Apagar os registros de "${username}" de ${start} até ${end}? A exclusão ficará limitada a esse período.`)) {
+    return;
+  }
+
+  button.disabled = true;
+  setMutedDeleteStatus("Apagando registros do período…");
+  try {
+    const result = await sendDeleteMutedUserRecords({ username, dailyRecords });
+    await renderSelectedReport();
+    const statusMessage = `${result.removedDates || 0} registro(s) diário(s) removido(s) do período.`;
+    setMutedDeleteStatus(statusMessage);
+    setStatus(statusMessage);
+  } catch (error) {
+    setMutedDeleteStatus(`Falha ao apagar: ${error.message}`, true);
+    button.disabled = false;
+  }
+}
+
 async function deleteReportData() {
   const modelId = elements.deleteReportModel.value;
   const modelName = elements.deleteReportModel.selectedOptions[0]?.textContent || modelId;
@@ -988,7 +1484,8 @@ async function deleteReportData() {
     ? elements.deleteReportScope.value
     : "day";
   const scope = selectedScope === "day" ? "date" : selectedScope;
-  const dateKey = elements.dateA.value;
+  const dateKey = elements.deleteReportDate.value;
+  const dateLabel = dateKey ? formatHistoryDate({ lastDate: dateKey }) : "";
   const liveId = elements.deleteReportLive.value;
   if (!modelId) {
     setDeleteReportStatus("Selecione um modelo para apagar.", true);
@@ -1006,8 +1503,8 @@ async function deleteReportData() {
   const confirmation = selectedScope === "model"
     ? `Apagar todo o histórico da modelo ${modelName}? Esta ação remove todas as datas desse modelo.`
     : selectedScope === "live"
-      ? `Apagar somente a live selecionada de ${modelName} em ${dateKey}?`
-      : `Apagar somente os dados de ${modelName} em ${dateKey}?`;
+      ? `Apagar somente a live selecionada de ${modelName} em ${dateLabel}?`
+      : `Apagar somente os dados de ${modelName} em ${dateLabel}?`;
   if (!confirm(confirmation)) {
     setDeleteReportStatus("Exclusão cancelada.");
     return;
@@ -1034,19 +1531,18 @@ async function deleteReportData() {
 
 elements.mode.addEventListener("change", () => renderSelectedReport().catch(showRenderError));
 elements.model.addEventListener("change", () => {
-  populateDateOptions({ resetMainToPreferred: true });
+  elements.timeGranularity.value = "auto";
   elements.deleteReportModel.value = elements.model.value;
+  populateDeleteDateOptions({ resetSelection: true });
+  populateDateOptions({ resetMainToPreferred: true });
   refreshLocalStorageSummary();
-  refreshDeleteLiveOptions().catch((error) => {
+  refreshDeleteLiveOptions({ resetSelection: true }).catch((error) => {
     setDeleteReportStatus(`Falha ao carregar as lives: ${error.message}`, true);
   });
   renderSelectedReport().catch(showRenderError);
 });
 elements.dateA.addEventListener("change", () => {
   populateDateOptions();
-  refreshDeleteLiveOptions().catch((error) => {
-    setDeleteReportStatus(`Falha ao carregar as lives: ${error.message}`, true);
-  });
   renderSelectedReport().catch(showRenderError);
 });
 elements.dateB.addEventListener("change", () => renderSelectedReport().catch(showRenderError));
@@ -1055,9 +1551,6 @@ elements.sessionA.addEventListener("change", () => {
   if (selectedSessionAId === selectedSessionBId) {
     selectedSessionBId = "";
     sessionComparisonCleared = false;
-  }
-  if (elements.deleteReportLive.querySelector(`option[value="${selectedSessionAId}"]`)) {
-    elements.deleteReportLive.value = selectedSessionAId;
   }
   renderSelectedReport().catch(showRenderError);
 });
@@ -1093,22 +1586,89 @@ elements.exportBackup.addEventListener("click", exportDataBackup);
 elements.importBackup.addEventListener("click", () => elements.backupFile.click());
 elements.deleteReportData.addEventListener("click", deleteReportData);
 elements.deleteReportModel.addEventListener("change", () => {
-  refreshDeleteLiveOptions().catch((error) => {
+  populateDeleteDateOptions({ resetSelection: true });
+  refreshDeleteLiveOptions({ resetSelection: true }).catch((error) => {
     setDeleteReportStatus(`Falha ao carregar as lives: ${error.message}`, true);
   });
 });
 elements.backupFile.addEventListener("change", inspectBackupFile);
-elements.deleteReportScope.addEventListener("change", updateDeleteReportScope);
+elements.deleteReportDate.addEventListener("change", () => {
+  refreshDeleteLiveOptions({ resetSelection: true }).catch((error) => {
+    setDeleteReportStatus(`Falha ao carregar as lives: ${error.message}`, true);
+  });
+});
+elements.deleteReportScope.addEventListener("change", () => {
+  updateDeleteReportScope();
+  if (elements.deleteReportScope.value !== "live") return;
+  refreshDeleteLiveOptions().catch((error) => {
+    setDeleteReportStatus(`Falha ao carregar as lives: ${error.message}`, true);
+  });
+});
 elements.backupImportScope.addEventListener("change", updateBackupImportControls);
 elements.applyBackup.addEventListener("click", applyDataBackup);
 elements.cancelBackup.addEventListener("click", () => {
   clearPendingBackup();
   setBackupStatus("Importação cancelada.");
 });
+elements.workspace.addEventListener("change", (event) => {
+  const form = event.target.closest("[data-manual-entry-form]");
+  if (!form) return;
+  updateManualEntryForm(form);
+  captureManualEntryDraft(form);
+});
+elements.workspace.addEventListener("input", (event) => {
+  const form = event.target.closest("[data-manual-entry-form]");
+  if (form) captureManualEntryDraft(form);
+});
+elements.workspace.addEventListener("submit", (event) => {
+  const form = event.target.closest("[data-manual-entry-form]");
+  if (!form) return;
+  event.preventDefault();
+
+  const button = form.querySelector('button[type="submit"]');
+  const status = form.querySelector("[data-manual-entry-status]");
+  if (button) button.disabled = true;
+  if (status) status.textContent = "Salvando…";
+  saveManualEarning(form)
+    .then(async ({ amount, entryType }) => {
+      manualEntryDraft = null;
+      setStatus(`${entryType}: ${amount} tk adicionados ao relatório.`);
+      try {
+        await renderSelectedReport();
+      } catch (error) {
+        setStatus(`Ganho salvo, mas o relatório não foi atualizado: ${error.message}`, true);
+      }
+    })
+    .catch((error) => {
+      if (status) status.textContent = error.message;
+      setStatus(`Falha ao adicionar o ganho manual: ${error.message}`, true);
+    })
+    .finally(() => {
+      if (button) button.disabled = false;
+    });
+});
 elements.workspace.addEventListener("click", (event) => {
+  const manualEntryButton = event.target.closest(".report-delete-manual-entry");
+  if (manualEntryButton) {
+    deleteManualEntry(manualEntryButton);
+    return;
+  }
+
   const timelineButton = event.target.closest(".report-delete-timeline");
   if (timelineButton) {
     deleteTimelineEntry(timelineButton);
+    return;
+  }
+
+  const moderationLogButton = event.target.closest(".report-delete-moderation-log");
+  if (moderationLogButton) {
+    deleteModerationLog(moderationLogButton);
+    return;
+  }
+
+  const mutedUserButton = event.target.closest(".report-delete-muted-user");
+  if (mutedUserButton) {
+    deleteMutedUserRecords(mutedUserButton);
     return;
   }
 

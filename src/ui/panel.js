@@ -1,4 +1,5 @@
 import { clean } from "../utils/helpers.js";
+import { aggregateDonorEvents } from "./donor-utils.js";
 import { safeStorage } from "../core/storage.js";
 import {
   buildDailyReportCsv,
@@ -64,6 +65,7 @@ let sessionUserFlowStepMin = "auto";
 let dailyStatsRenderSequence = 0;
 let sessionUserFlowChartCache = { sessionId: "", updatedAt: 0, html: "" };
 let pendingBackupImport = null;
+let moderationDeleteStatus = "";
 let todayTokensHistoryCache = {
   key: "",
   updatedAt: 0,
@@ -266,17 +268,7 @@ function buildGainTypeChart(summaryMapOverride = null, eventsOverride = null) {
 function buildTopDonorsChart(limit = 6, scopeEventsOverride = null) {
   let donors;
   if (Array.isArray(scopeEventsOverride)) {
-    const donorsMap = new Map();
-    scopeEventsOverride.forEach((event) => {
-      const name = String(event?.user || "").trim();
-      const tokens = Number(event?.price ?? event?.tokens) || 0;
-      if (!name || name === "—" || tokens <= 0) return;
-      const previous = donorsMap.get(name) || { name, tokens: 0, tips: 0 };
-      previous.tokens += tokens;
-      previous.tips += 1;
-      donorsMap.set(name, previous);
-    });
-    donors = Array.from(donorsMap.values()).sort((a, b) => b.tokens - a.tokens);
+    donors = aggregateDonorEvents(scopeEventsOverride);
   } else {
     donors = Object.values(state.users || {})
       .filter((u) => u && (Number(u.tokens) || 0) > 0)
@@ -820,18 +812,77 @@ export function renderModerationLogs() {
   const tbody = panel.querySelector("#scm-moderation-table");
   if (!tbody) return;
 
-  const logs = state.moderationLogs || [];
-  tbody.innerHTML = buildModerationLogRows(logs);
-  if (logs.length === 0) return;
+  const logsById = new Map();
+  const addLog = (log, dateKey = "") => {
+    if (!log || typeof log !== "object") return;
+    const timestamp = Number(log.timestamp) || 0;
+    const id = String(log.id || `${timestamp}|${log.user || ""}|${log.message || ""}`);
+    const logDate = String(log.dateKey || dateKey || (timestamp ? localDateKey(timestamp) : ""));
+    if (!logDate) return;
+    const previous = logsById.get(id);
+    if (!previous || (Number(log.updatedAt) || timestamp) >= (Number(previous.updatedAt) || Number(previous.timestamp) || 0)) {
+      logsById.set(id, { ...log, id: String(log.id || ""), dateKey: logDate });
+    }
+  };
+  Object.entries(state.dailyBuckets || {}).forEach(([dateKey, bucket]) => {
+    const dailyLogs = Array.isArray(bucket?.moderationLogs)
+      ? bucket.moderationLogs
+      : Object.values(bucket?.moderationLogs || {});
+    dailyLogs.forEach((log) => addLog(log, dateKey));
+  });
+  (state.moderationLogs || []).forEach((log) => addLog(log));
+  const logs = Array.from(logsById.values());
+  const currentDate = localDateKey();
+  const currentDateLabel = panel.querySelector("#scm-modlog-current-date");
+  const deleteStatus = panel.querySelector("#scm-modlog-delete-status");
+  if (deleteStatus) deleteStatus.textContent = moderationDeleteStatus;
+  if (currentDateLabel) currentDateLabel.textContent = formatIsoDateToBr(currentDate);
+  const visibleLogs = logs.filter((log) => log.dateKey === currentDate);
+  tbody.innerHTML = buildModerationLogRows(visibleLogs);
+  if (visibleLogs.length === 0) return;
 
   tbody.querySelectorAll(".scm-modlog-del").forEach((btn) => {
     btn.onclick = (e) => {
       e.stopPropagation();
-      const idx = Number(btn.getAttribute("data-index"));
-      logs.splice(idx, 1);
-      state.moderationLogs = logs;
-      renderModerationLogs();
-      saveToGlobalHistory();
+      const logId = String(btn.getAttribute("data-log-id") || "");
+      const log = visibleLogs.find((entry) => String(entry.id || "") === logId);
+      if (!logId || !log || !confirm("Remover este registro de moderação? Os totais agregados não serão alterados.")) {
+        return;
+      }
+      btn.disabled = true;
+      moderationDeleteStatus = "Removendo registro…";
+      if (deleteStatus) deleteStatus.textContent = moderationDeleteStatus;
+      chrome.runtime.sendMessage({
+        type: "SCM_DELETE_MODERATION_LOG",
+        modelId: String(state.modelId || ""),
+        dateKey: log.dateKey,
+        logId,
+      }, (response) => {
+        const error = chrome.runtime.lastError;
+        if (error || !response?.ok) {
+          moderationDeleteStatus = `Falha ao remover: ${error?.message || response?.error || "erro desconhecido"}`;
+          btn.disabled = false;
+          if (deleteStatus) deleteStatus.textContent = moderationDeleteStatus;
+          return;
+        }
+        state.moderationLogs = (state.moderationLogs || []).filter(
+          (entry) => String(entry.id || "") !== logId,
+        );
+        const bucket = state.dailyBuckets?.[log.dateKey];
+        if (bucket) {
+          bucket.moderationLogs = (Array.isArray(bucket.moderationLogs)
+            ? bucket.moderationLogs
+            : []).filter((entry) => String(entry.id || "") !== logId);
+          bucket.moderationLogDeletedIds = Array.from(new Set([
+            ...(Array.isArray(bucket.moderationLogDeletedIds)
+              ? bucket.moderationLogDeletedIds
+              : []),
+            logId,
+          ]));
+        }
+        moderationDeleteStatus = `Registro removido; os totais foram mantidos.${response.warning || ""}`;
+        renderModerationLogs();
+      });
     };
   });
 }
@@ -930,10 +981,25 @@ export function renderStatsSummary(sessionTokensVal) {
   const donorTips = donorsList.reduce((acc, u) => acc + (Number(u.tips) || 0), 0);
   const avgPerDonor = donorsList.length > 0 ? Math.round(donorTokens / donorsList.length) : 0;
   const avgPerTip = donorTips > 0 ? Math.round(donorTokens / donorTips) : 0;
+  const liveUserMetrics = [
+    ["👥 Listados", uPeak.listedUsersCount, uAvg.listedUsersCount],
+    ["🪙 Com tokens", uPeak.tokensUsersCount, uAvg.tokensUsersCount],
+    ["👑 Ultimate", uPeak.ultimateUsersCount, uAvg.ultimateUsersCount],
+    ["👻 Invisíveis", uPeak.invisibleUsersCount, uAvg.invisibleUsersCount],
+  ];
+  const liveLeagueMetrics = [
+    ["Cinzas", "🔘", "#94a3b8", lPeak.grey, lAvg.grey],
+    ["Bronze", "🟠", "#f97316", lPeak.bronze, lAvg.bronze],
+    ["Prata", "🔵", "#00e5ff", lPeak.silver, lAvg.silver],
+    ["Ouro", "🟡", "#facc15", lPeak.gold, lAvg.gold],
+    ["Diamante", "🟣", "#c084fc", lPeak.diamond, lAvg.diamond],
+    ["Real", "🔴", "#ff2a6d", lPeak.royal, lAvg.royal],
+    ["Lendária", "⭐", "#ff7b00", lPeak.legend, lAvg.legend],
+  ];
 
   container.innerHTML = `
     <div style="font-weight: 600; color: #00e5ff; margin-bottom: 10px; border-bottom: 1px solid #272952; padding-bottom: 6px; display: flex; justify-content: space-between; font-size: 12px;">
-      <span>⚡ Painel Analítico (Sessão Ativa)</span>
+      <span>⚡ Painel Analítico (Live Ativa)</span>
       <span style="font-size: 10px; color: ${isMonitoring ? "#34d399" : "#94a3b8"}; background: ${isMonitoring ? "rgba(52,211,153,0.15)" : "rgba(148,163,184,0.12)"}; padding: 2px 8px; border-radius: 99px; font-weight: bold;">${isMonitoring ? "MONITORANDO" : "PAUSADO"}</span>
     </div>
 
@@ -954,16 +1020,40 @@ export function renderStatsSummary(sessionTokensVal) {
       })}
     </div>
 
-    <div style="margin-bottom: 10px; border-bottom: 1px dashed #272952; padding-bottom: 8px; line-height: 1.6; font-size: 11px;">
-      <strong style="color: #00e5ff;">📈 Resumo da Live:</strong><br>
-      <strong>🎖️ Pico Espectadores:</strong> ${currentLivePeak}  |  <strong>🧑🏻‍💻 Média:</strong> ${avgViewersVal}<br>
-      <span style="font-size:10px; color:#8b92b8;">Amostras com monitoramento ativo: ${viewerSampleCount} • Última leitura: ${clean(lastViewerSample)}</span><br>
-      <strong>✨ Tokens na Sessão:</strong> <span style="color: #00e5ff; font-weight: bold;">${liveTokens.toLocaleString("pt-BR")} tk</span>  |  <strong>⚡ Ritmo:</strong> <span style="color: #ff7b00; font-weight: bold;">${clean(tokensPerHourDisplay)}</span><br>
-      ${bestActivityBlock && (Number(bestActivityBlock.tokens) || 0) > 0
-        ? `<strong>🔥 Melhor intervalo (5 min):</strong> ${clean(bestActivityBlock.minute)} • ${Math.round(Number(bestActivityBlock.tokens) || 0).toLocaleString("pt-BR")} tk<br>`
-        : ""}
-      <strong>🎟️ Ticket Médio:</strong> ${avgPerDonor} tk/doador  |  ${avgPerTip} tk/gorjeta
-    </div>
+    <section style="margin-bottom:14px; padding-bottom:12px; border-bottom:1px dashed #272952;">
+      <strong style="display:block; color:#00e5ff; font-size:12px; margin-bottom:8px;">📈 Resumo da Live</strong>
+      <div style="display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px;">
+        <div style="padding:7px 9px; border-radius:8px; background:rgba(255,255,255,0.035);">
+          <span style="display:block; color:#8b92b8; font-size:10px;">🎖️ Pico de espectadores</span>
+          <strong style="font-size:12px;">${currentLivePeak}</strong>
+        </div>
+        <div style="padding:7px 9px; border-radius:8px; background:rgba(255,255,255,0.035);">
+          <span style="display:block; color:#8b92b8; font-size:10px;">🧑🏻‍💻 Média</span>
+          <strong style="font-size:12px;">${avgViewersVal}</strong>
+        </div>
+        <div style="padding:7px 9px; border-radius:8px; background:rgba(255,255,255,0.035);">
+          <span style="display:block; color:#8b92b8; font-size:10px;">✨ Tokens na Live</span>
+          <strong style="font-size:12px; color:#00e5ff;">${liveTokens.toLocaleString("pt-BR")} tk</strong>
+        </div>
+        <div style="padding:7px 9px; border-radius:8px; background:rgba(255,255,255,0.035);">
+          <span style="display:block; color:#8b92b8; font-size:10px;">⚡ Ritmo</span>
+          <strong style="font-size:12px; color:#ff7b00;">${clean(tokensPerHourDisplay)}</strong>
+        </div>
+        ${bestActivityBlock && (Number(bestActivityBlock.tokens) || 0) > 0
+          ? `<div style="padding:7px 9px; border-radius:8px; background:rgba(255,255,255,0.035);">
+              <span style="display:block; color:#8b92b8; font-size:10px;">🔥 Melhor intervalo (5 min)</span>
+              <strong style="font-size:12px;">${clean(bestActivityBlock.minute)} · ${Math.round(Number(bestActivityBlock.tokens) || 0).toLocaleString("pt-BR")} tk</strong>
+            </div>`
+          : ""}
+        <div style="padding:7px 9px; border-radius:8px; background:rgba(255,255,255,0.035);">
+          <span style="display:block; color:#8b92b8; font-size:10px;">📊 Média de contribuição</span>
+          <strong style="font-size:12px;">${avgPerDonor} tk/doador · ${avgPerTip} tk/gorjeta</strong>
+        </div>
+      </div>
+      <div style="margin-top:6px; color:#8b92b8; font-size:10px;">
+        Amostras com monitoramento ativo: ${viewerSampleCount} · Última leitura: ${clean(lastViewerSample)}
+      </div>
+    </section>
 
     ${buildTimeStepSelectorHtml({
       className: "scm-session-user-flow-step",
@@ -971,19 +1061,33 @@ export function renderStatsSummary(sessionTokensVal) {
       autoStep: getAdaptiveTimeStep(normalizeMinuteBuckets(currentLiveSession?.minuteBucketsByMinute)),
       label: "Bloco do fluxo de usuários:",
     })}
-    ${sessionUserFlowChartCache.html}
-    ${buildAudienceFunnelCard()}
-    ${buildGainTypeChart()}
-    ${buildTopDonorsChart()}
+    <div style="margin-bottom:12px;">${sessionUserFlowChartCache.html}</div>
+    <div style="margin-bottom:12px;">${buildAudienceFunnelCard()}</div>
+    <div style="margin-bottom:12px;">${buildGainTypeChart()}</div>
+    <div style="margin-bottom:12px;">${buildTopDonorsChart()}</div>
 
-    <div style="margin-bottom: 10px; border-bottom: 1px dashed #272952; padding-bottom: 8px; line-height: 1.6; font-size: 11px;">
-      <strong style="color: #c084fc;">👥 Usuários (Pico / Média):</strong><br>
-      Listados: ${uPeak.listedUsersCount || 0}/${Math.round(uAvg.listedUsersCount || 0)} | Com Tokens: ${uPeak.tokensUsersCount || 0}/${Math.round(uAvg.tokensUsersCount || 0)} | Ultimate: ${uPeak.ultimateUsersCount || 0}/${Math.round(uAvg.ultimateUsersCount || 0)} | Invisíveis: ${uPeak.invisibleUsersCount || 0}/${Math.round(uAvg.invisibleUsersCount || 0)}
+    <div style="margin-bottom:12px; padding-bottom:12px; border-bottom:1px dashed #272952;">
+      <strong style="display:block; color:#c084fc; font-size:11px; margin-bottom:7px;">👥 Usuários</strong>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:5px;">
+        ${liveUserMetrics.map(([label, peak, average]) => `
+          <div style="padding:6px 8px; border-radius:7px; background:rgba(255,255,255,0.035);">
+            <span style="display:block; color:#8b92b8; font-size:9px;">${label}</span>
+            <strong style="font-size:10px;">Pico ${Math.round(Number(peak) || 0)} · Média ${Math.round(Number(average) || 0)}</strong>
+          </div>
+        `).join("")}
+      </div>
     </div>
 
-    <div style="line-height: 1.6; font-size: 11px;">
-      <strong style="color: #ff7b00;">🏆 Ligas (Pico / Média):</strong><br>
-      🔘${lPeak.grey || 0}/${Math.round(lAvg.grey || 0)}   🟠${lPeak.bronze || 0}/${Math.round(lAvg.bronze || 0)}   🔵${lPeak.silver || 0}/${Math.round(lAvg.silver || 0)}   🟡${lPeak.gold || 0}/${Math.round(lAvg.gold || 0)}   🟣${lPeak.diamond || 0}/${Math.round(lAvg.diamond || 0)}   🔴${lPeak.royal || 0}/${Math.round(lAvg.royal || 0)}   ⭐${lPeak.legend || 0}/${Math.round(lAvg.legend || 0)}
+    <div>
+      <strong style="display:block; color:#ff7b00; font-size:11px; margin-bottom:7px;">🏆 Ligas</strong>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(100px,1fr)); gap:5px;">
+        ${liveLeagueMetrics.map(([label, icon, color, peak, average]) => `
+          <div style="padding:6px 8px; border-radius:7px; background:rgba(255,255,255,0.035); border-left:2px solid ${color};">
+            <span style="display:block; color:#cbd5e1; font-size:9px;">${icon} ${label}</span>
+            <strong style="font-size:10px;">Pico ${Math.round(Number(peak) || 0)} · Média ${Math.round(Number(average) || 0)}</strong>
+          </div>
+        `).join("")}
+      </div>
     </div>
   `;
 
@@ -1149,7 +1253,7 @@ function generateExecutiveText(rep) {
     `📊 *RELATÓRIO DIÁRIO - ${rep.modelName.toUpperCase()}*`,
     `📅 Data: ${rep.dateBr}`,
     ``,
-    `💰 *Tokens (gorjetas + shows estimados):* ${rep.totalTokens} tk`,
+    `💰 *Tokens (ganhos registrados):* ${rep.totalTokens} tk`,
     `⏱️ *Tempo Bruto:* ${formatSecondsToTime(rep.bruteSeconds)}`,
     `🟢 *Tempo Líquido:* ${formatSecondsToTime(rep.netSeconds)}`,
     `🎖️ *Pico Espectadores:* ${rep.peakViewers}`,
@@ -1157,7 +1261,7 @@ function generateExecutiveText(rep) {
   ];
 
   if (rep.liveSessions.length > 0) {
-    lines.push(``, `🎬 *Sessões de Live (${rep.liveSessions.length}):*`);
+    lines.push(``, `🎬 *Lives (${rep.liveSessions.length}):*`);
     rep.liveSessions.forEach((s, i) => {
       const dur = formatSecondsToTime(Number(s.durationSeconds) || 0);
       lines.push(
@@ -1238,7 +1342,7 @@ export function openDailyReportModal(entryKey) {
               </tr>`
               )
               .join("")
-          : `<tr><td colspan="5" style="text-align:center; color:#8b92b8;">Nenhuma sessão segmentada registrada.</td></tr>`;
+          : `<tr><td colspan="5" style="text-align:center; color:#8b92b8;">Nenhuma live segmentada registrada.</td></tr>`;
 
       const minuteHtml =
         rep.minuteRows.length > 0
@@ -1270,13 +1374,13 @@ export function openDailyReportModal(entryKey) {
         </div>
 
         <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:8px; margin-bottom:12px;">
-          <div style="background:#23264d; padding:8px 10px; border-radius:8px;"><small style="color:#8b92b8;">Tokens (gorjetas + shows estimados)</small><div style="font-weight:bold; color:#00e5ff; font-size:14px;">${rep.totalTokens} tk</div></div>
+          <div style="background:#23264d; padding:8px 10px; border-radius:8px;"><small style="color:#8b92b8;">Tokens (ganhos registrados)</small><div style="font-weight:bold; color:#00e5ff; font-size:14px;">${rep.totalTokens} tk</div></div>
           <div style="background:#23264d; padding:8px 10px; border-radius:8px;"><small style="color:#8b92b8;">Pico / Média</small><div style="font-weight:bold; color:#ff2a6d; font-size:14px;">${rep.peakViewers} / ${rep.avgViewers}</div></div>
           <div style="background:#23264d; padding:8px 10px; border-radius:8px;"><small style="color:#8b92b8;">Tempo Bruto</small><div style="font-weight:bold; color:#f8fafc;">${formatSecondsToTime(rep.bruteSeconds)}</div></div>
           <div style="background:#23264d; padding:8px 10px; border-radius:8px;"><small style="color:#8b92b8;">Tempo Líquido</small><div style="font-weight:bold; color:#c084fc;">${formatSecondsToTime(rep.netSeconds)}</div></div>
         </div>
 
-        <div style="font-weight:bold; color:#ff7b00; margin:10px 0 6px;">🎬 Sessões de Live (${rep.liveSessions.length})</div>
+        <div style="font-weight:bold; color:#ff7b00; margin:10px 0 6px;">🎬 Lives (${rep.liveSessions.length})</div>
         <div class="scroll" style="height:120px; min-height:70px;">
           <table>
             <thead><tr><th>#</th><th>Horário</th><th>Duração</th><th>Tokens</th><th>Pico</th></tr></thead>
@@ -1337,7 +1441,7 @@ function renderUsersAudienceChart() {
     Number(state.currentViewers) || 0,
   );
   const stepLabel = stepMin === 60 ? "1h" : `${stepMin} min`;
-  const intervalLabel = `${usersAudienceStepMin === "auto" ? "Auto • " : ""}Média por bloco de ${stepLabel} • sessão atual`;
+  const intervalLabel = `${usersAudienceStepMin === "auto" ? "Auto • " : ""}Média por bloco de ${stepLabel} • live atual`;
 
   chart.innerHTML = buildAudienceLeagueChart(audiencePoints, sessionPeak, intervalLabel);
   panel.querySelectorAll(".scm-users-audience-step").forEach((button) => {

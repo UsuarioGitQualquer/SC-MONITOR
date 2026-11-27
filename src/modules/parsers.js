@@ -721,7 +721,35 @@ export function readUserListCounts() {
 }
 
 export function isRoomOffline() {
-  return !!document.querySelector(
+  if (document.querySelector(
     ".vc-status-offline, .availability-status.offline",
+  )) return true;
+
+  const statusElements = document.querySelectorAll(
+    '[class*="ViewCamShutterWrapper__status"], [data-testid*="status"], [data-testid*="offline"]',
   );
+  return Array.from(statusElements).some((element) => {
+    const className = typeof element.className === "string" ? element.className : "";
+    const testId = element.getAttribute?.("data-testid") || "";
+    const statusIdentity = `${className} ${testId}`
+      .replace(/([a-z])([A-Z])/g, "$1 $2");
+    if (
+      !/offline[\s_-]*status[\s_-]*time/i.test(statusIdentity) &&
+      /\boffline\b/i.test(statusIdentity)
+    ) return true;
+
+    const text = [
+      element.innerText,
+      element.textContent,
+      element.getAttribute?.("aria-label"),
+      element.getAttribute?.("title"),
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .normalize("NFKC")
+      .replace(/[\u2010-\u2015\u2212]/g, "-")
+      .replace(/\s+/g, " ")
+      .trim();
+    return /(?:^|\b)(?:off[\s-]?line|fora\s+de\s+linha|fuera\s+de\s+l[ií]nea)\b/i.test(text);
+  });
 }

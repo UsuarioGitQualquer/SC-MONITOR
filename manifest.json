@@ -1,7 +1,8 @@
 {
   "manifest_version": 3,
+  "incognito": "spanning",
   "name": "SC Monitor",
-  "version": "5.0",
+  "version": "5.0.3",
   "description": "Painel local de audiência, chat, gorjetas, metas, shows e moderação para salas do Stripchat.",
   "permissions": [
     "storage",

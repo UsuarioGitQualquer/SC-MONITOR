@@ -15,7 +15,13 @@ export function buildMutedUserRows(mutedUsers) {
   }
 
   return mutedUsers
-    .map((item, index) => {
+    .map((item, index) => ({ item, index }))
+    .sort((a, b) => {
+      const aTimestamp = Number(a.item.timestamp ?? a.item._timestamp) || 0;
+      const bTimestamp = Number(b.item.timestamp ?? b.item._timestamp) || 0;
+      return bTimestamp - aTimestamp || a.index - b.index;
+    })
+    .map(({ item, index }) => {
       const recentMessages = Array.isArray(item.recentMessages)
         ? item.recentMessages
             .map((message) => String(message || "").trim())
@@ -52,12 +58,12 @@ export function buildModerationLogRows(logs) {
 
   return [...logs]
     .reverse()
-    .map((log, reverseIndex) => {
-      const realIndex = logs.length - 1 - reverseIndex;
+    .map((log) => {
       const status = String(log.status || "SUCESSO").toUpperCase();
       const statusColor =
         status === "SUCESSO" ? "#00e5ff" : status === "PENDENTE" ? "#ff7b00" : "#ff2a6d";
       const when = log.time || (log.timestamp ? new Date(log.timestamp).toLocaleString() : "");
+      const logId = String(log.id || "");
       return `
         <tr>
           <td style="min-width: 110px; vertical-align: top; padding: 8px;">
@@ -69,7 +75,7 @@ export function buildModerationLogRows(logs) {
             <div>${clean(log.message)}</div>
             ${log.keyword ? `<div style="font-size: 10px; color: #ff7b00; margin-top: 4px;">Palavra: ${clean(log.keyword)}</div>` : ""}
             ${log.detail ? `<div style="font-size: 10px; color: #8b92b8; margin-top: 3px;">${clean(log.detail)}</div>` : ""}
-            <button class="scm-modlog-del" data-index="${realIndex}" style="position: absolute; right: 6px; top: 6px; background: transparent; border: 0; color: #ff2a6d; cursor: pointer; font-size: 14px;" title="Remover histórico">✕</button>
+            ${logId ? `<button type="button" class="scm-modlog-del" data-log-id="${escapeAttribute(logId)}" style="position: absolute; right: 6px; top: 6px; background: transparent; border: 0; color: #ff2a6d; cursor: pointer; font-size: 14px;" title="Remover histórico">✕</button>` : ""}
           </td>
         </tr>
       `;

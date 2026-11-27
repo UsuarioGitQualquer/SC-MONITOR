@@ -24,15 +24,26 @@ test("renders muted user details with at most two recent messages", () => {
   assert.match(buildMutedUserRows([]), /Nenhum usuário silenciado/);
 });
 
-test("renders moderation logs newest-first with the original removal indexes", () => {
+test("renders muted users newest-first and preserves original removal indexes", () => {
+  const html = buildMutedUserRows([
+    { username: "Older", mutedBy: "Moderator", timestamp: 100 },
+    { username: "Newer", mutedBy: "Moderator", timestamp: 200 },
+  ]);
+
+  assert.ok(html.indexOf("Newer") < html.indexOf("Older"));
+  assert.match(html, /data-index="1"/);
+  assert.match(html, /data-index="0"/);
+});
+
+test("renders moderation logs newest-first with stable removal IDs", () => {
   const html = buildModerationLogRows([
-    { user: "older", message: "old", status: "FALHA" },
-    { user: "newer", message: "<unsafe>", status: "PENDENTE" },
+    { id: "older-log", user: "older", message: "old", status: "FALHA" },
+    { id: "newer-log", user: "newer", message: "<unsafe>", status: "PENDENTE" },
   ]);
 
   assert.ok(html.indexOf("newer") < html.indexOf("older"));
-  assert.match(html, /data-index="1"/);
-  assert.match(html, /data-index="0"/);
+  assert.match(html, /data-log-id="newer-log"/);
+  assert.match(html, /data-log-id="older-log"/);
   assert.match(html, /&lt;unsafe&gt;/);
   assert.match(html, /color: #ff7b00/);
   assert.match(buildModerationLogRows([]), /Nenhuma mensagem moderada/);

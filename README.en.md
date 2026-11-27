@@ -1,484 +1,457 @@
-SC MONITOR - VERSIÓN 5.0
+SC MONITOR - VERSION 5.0.3
 ========================================================================
 
-       Panel local de audiencia, chat, propinas, metas y moderación
+       Local audience, chat, tips, goals, and moderation dashboard
 
-                             para Stripchat
+                              for Stripchat
 ========================================================================
 
-SC Monitor es una extensión para navegadores Chromium que supervisa en
-tiempo real la actividad de las salas de Stripchat. Los datos se procesan y
-se guardan localmente en el navegador. La versión 5.0 mejora la estabilidad
-de los datos durante transmisiones largas y amplía el análisis con mapas de
-calor, eficiencia de audiencia, interacción por liga y una cronología
-combinada de metas y shows.
+SC Monitor is a Chromium browser extension that monitors activity in
+Stripchat rooms in real time. Data is processed and stored locally in the
+browser. Version 5.0.3 improves offline status and chat activity detection so
+automatic notifications and updates to existing messages do not prevent an
+offline live from ending after two minutes without new real chat messages. It
+retains the 5.0 improvements: better data stability during long broadcasts and
+analysis with heatmaps, audience efficiency, league engagement, and a
+combined goals-and-shows timeline.
 
 
 ------------------------------------------------------------------------
-📌 NOVEDADES Y FUNCIONES DE LA VERSIÓN 5.0
+📌 VERSION 5.0 HIGHLIGHTS AND FEATURES
 ------------------------------------------------------------------------
 
-COMPARACIONES POR DÍA DE LA SEMANA Y TRANSPARENCIA DE LAS MÉTRICAS
+WEEKDAY COMPARISONS AND TRANSPARENT METRICS
 
-   - Los informes por período comparan el promedio de tokens, el promedio de
-     espectadores y el pico de espectadores por día de la semana, contando
-     solo los días con historial guardado.
+   - Period reports compare average tokens, average viewers, and peak viewers
+     by weekday, counting only days with saved history.
 
-   - El promedio de audiencia indica cuántas muestras se recopilaron durante
-     el monitoreo; las categorías de público pueden superponerse.
+   - Average audience shows how many samples were collected during monitoring;
+     audience categories may overlap.
 
-   - Los valores de los shows son estimaciones basadas en el estado del
-     reproductor y las tarifas configuradas; no confirman pagos.
+   - Show token values are estimates based on the player state and configured
+     rates; they are not payment confirmations.
 
-   - La lista de usuarios sospechosos considera la visita actual observada en
-     la lista de usuarios y descuenta los mensajes y tokens anteriores a esa
-     visita. Al terminar el monitoreo de una sala offline, se finalizan las
-     visitas abiertas.
+   - The suspected-user list considers the current visit observed in the user
+     list and excludes messages and tokens from before that visit. When
+     monitoring of an offline room ends, open visits are finalized.
 
-   - El menú y la ruleta se leen a partir de los eventos y mensajes mostrados
-     en el chat. El monitoreo no lee parámetros de iframe.
+   - Menu and roulette events are read from events and messages displayed in
+     chat. Monitoring does not read iframe parameters.
 
 
-1. HISTORIAL ACUMULATIVO DE METAS DE LA SALA
+1. ACCUMULATING ROOM-GOAL HISTORY
 
-   - Protección contra las actualizaciones del DOM y los cambios de pestaña
-     del chat.
+   - Protection against DOM re-renders and chat-tab changes.
 
-   - Un acumulador inteligente (Merge) conserva el historial de metas de la
-     sesión aunque estas salgan del área visible del chat o la sala entre en
-     modo ticket/offline.
+   - A smart merge accumulator preserves session goal history even when goals
+     leave the visible chat area or the room enters ticket/offline mode.
 
-   - Se conservan los estados de las metas (Pendiente, Completada,
-     Interrumpida) y las metas completadas se agregan automáticamente a la
-     lista de tareas.
+   - Goal statuses (Pending, Completed, Interrupted) are preserved, and
+     completed goals are automatically added to the to-do list.
 
 
-2. LISTA DE TAREAS Y COPIA RÁPIDA
+2. TO-DO LIST AND QUICK COPY
 
-   - Las solicitudes se agregan automáticamente desde el Menú de Propinas,
-     los resultados de plugins/ruleta, el Fan Club y las metas completadas.
+   - Requests are automatically added from the Tip Menu, plugin/roulette
+     results, Fan Club, and completed goals.
 
-   - El panel muestra cada elemento con la hora [HH:MM:SS], el usuario y el
-     origen.
+   - The panel displays each item with its time [HH:MM:SS], user, and source.
 
-   - El nuevo botón "📋 Copiar pendientes" copia solo las tareas que aún no
-     se completaron al portapapeles, con un formato limpio y encadenado:
+   - The new "📋 Copy Pending" button copies only unfinished tasks to the
+     clipboard in a clean, chained format:
 
-     descripción (@nombredeusuario) -> descripción (@otronombre).
+     description (@username) -> description (@anotheruser).
 
 
-3. REGISTRO DE SHOWS (PRIVADO, EXCLUSIVO, GRUPO Y TICKET)
+3. SHOW ACCOUNTING (PRIVATE, EXCLUSIVE, GROUP, AND TICKET)
 
-   - Los cargos y registros se crean inmediatamente al comenzar un show y
-     luego se calculan ciclos precisos por cada 60 segundos activos.
+   - Charges and records are created immediately when a show starts, followed
+     by accurate cycles for every 60 active seconds.
 
-   - Los importes de los Shows en Grupo se calculan dinámicamente según la
-     tarifa por minuto y la cantidad de participantes que están mirando.
+   - Group Show amounts are calculated dynamically from the per-minute rate
+     and the number of participants watching.
 
-   - Los Ticket Shows se clasifican con datos del DOM, el precio anunciado y
-     la confirmación de que el usuario ingresó.
+   - Ticket Shows are classified using DOM data, the advertised price, and
+     confirmation that the user entered.
 
 
-4. DETECCIÓN DE ESPECTADORES SOSPECHOSOS / BOTS
+4. SUSPECTED VIEWER / BOT DETECTION
 
-   - El análisis de comportamiento combina el tiempo sin interacción, la liga
-     y el nivel (con atención especial a las cuentas Grises de nivel 9 o
-     inferior), patrones numéricos o genéricos en los nombres de usuario y
-     salidas/regresos sincronizados durante shows restringidos.
+   - Behavioral analysis combines time spent without interaction, league and
+     level (with a focus on Gray accounts at level 9 or below), numeric or
+     generic username patterns, and synchronized departures/returns during
+     restricted shows.
 
 
-5. PANELES ANALÍTICOS (SESIÓN ACTIVA Y RESUMEN DIARIO)
+5. ANALYTICS DASHBOARDS (ACTIVE SESSION AND DAILY SUMMARY)
 
-   - 📊 Analítica de sesión activa ofrece en tiempo real los picos y promedios
-     de espectadores, la actividad efectiva, los tokens y la retención.
+   - 📊 Active Session Analytics provides real-time viewer peaks and
+     averages, effective activity, tokens, and retention.
 
-   - Retención de hoy muestra los usuarios nuevos y recurrentes, además del
-     porcentaje de retorno. Los usuarios cuya fecha de primera visita se
-     desconoce se clasifican como recurrentes; no se supone que sean nuevos.
+   - Today's Retention shows new and returning users and the return
+     percentage. Users whose first-visit date is unknown are classified as
+     returning; they are not assumed to be new.
 
-   - La actividad efectiva es el tiempo neto en transmisión en vivo dividido
-     por el tiempo total monitoreado. El Ritmo estima tokens por hora neta de
-     la sesión.
+   - Effective activity is net live-broadcast time divided by total monitored
+     time. Pace estimates tokens per net hour of the session.
 
-   - 📅 Resumen diario (hoy) combina todas las transmisiones del día e incluye
-     tokens, el pico máximo de espectadores y estadísticas de usuarios y
-     ligas.
+   - 📅 Daily Summary (Today) combines all broadcasts from the day, including
+     tokens, the highest viewer peak, and user and league statistics.
 
-   - El Flujo de tokens permite elegir bloques de 5, 10 o 30 minutos, o de
-     1 hora. Las diferencias entre el total diario y los registros por minuto
-     se incluyen en el bloque actual; el tooltip identifica los tokens sin
-     hora registrada. Los informes del día muestran esos tokens aparte, en
-     lugar de distribuirlos artificialmente entre los intervalos.
-     El panel de sesión también muestra el flujo promedio de usuarios listados
-     en bloques de 2 minutos, actualizado cada 2 minutos.
+   - Token Flow can use 5-, 10-, or 30-minute blocks, or 1-hour blocks.
+     Differences between the daily total and per-minute records are included
+     in the current block; the tooltip identifies tokens with no recorded
+     timestamp. Day reports show untimed tokens separately rather than
+     artificially distributing them across intervals.
+     The session dashboard also shows the average flow of listed users in
+     2-minute blocks, updated every 2 minutes.
 
-   - La pestaña Usuarios muestra áreas independientes por liga y una línea
-     del total de usuarios listados, en bloques de 2 minutos. El pico de
-     espectadores de la sala sigue apareciendo en el encabezado; los
-     espectadores sin nombre visible no se incluyen en el recuento de
-     usuarios listados.
+   - The Users tab shows separate areas for each league and a line for total
+     listed users, in 2-minute blocks. The room's viewer peak remains in the
+     header; viewers without a visible username are not included in the listed
+     user count.
 
 
-6. EVENTOS Y RESÚMENES POR SESIÓN O DÍA
+6. EVENTS AND SUMMARIES BY SESSION OR DAY
 
-   - La tabla de eventos y los bloques de resumen de la pestaña Eventos
-     pueden alternar entre los datos de la sesión actual y los acumulados del
-     día.
-
-   - El selector Sesión/Día actualiza en conjunto la lista de eventos, el
-     resumen consolidado por elemento, el gráfico de ganancias por tipo y la
-     clasificación de usuarios.
-
-   - Siguen disponibles los filtros Todos, Propinas, Menú y Metas/Shows.
-     Menú limita la lista a eventos de menú/pedido; Metas/Shows incluye
-     metas épicas, shows y tickets.
-
-   - Los eventos se separan por fecha local (hora de Brasilia), para evitar
-     que los registros del día anterior aparezcan en el resumen de hoy.
-
-
-7. MODERACIÓN AUTOMÁTICA Y SEGUIMIENTO DE USUARIOS SILENCIADOS
-
-   - Se pueden registrar dinámicamente palabras clave prohibidas por modelo
-     como etiquetas.
-
-   - La extensión puede intentar silenciar a un usuario mediante un cuadro
-     de confirmación y mantiene un historial completo (PENDIENTE, ÉXITO o
-     FALLO).
-
-   - Los usuarios silenciados se detectan de forma robusta en el chat
-     (.user-muted-message), registrando al autor, al moderador y el mensaje
-     capturado más reciente.
-
-
-8. CONTROL DEL TIEMPO E INTERFAZ FLOTANTE
-
-   - Hay cronómetros independientes para el tiempo total transcurrido y el
-     tiempo neto activo.
-
-   - En el modo Monitorear sala, cuando la modelo queda desconectada, SC
-     Monitor espera al menos 2 minutos. Cada mensaje nuevo en el chat reinicia
-     la espera. Si pasan 2 minutos sin mensajes, termina la transmisión; si la
-     modelo vuelve después, empieza una nueva.
-
-   - El panel se puede arrastrar desde el encabezado o la barra inferior
-     interna, que muestra la fecha y el logo. Se puede ajustar el tamaño desde
-     cualquiera de las cuatro esquinas. También se puede fijar y ofrece
-     recolección automática alternando entre las pestañas de chat y usuarios.
-
-   - El icono de la extensión muestra el avatar de la modelo mientras el
-     monitoreo está activo.
-
-
-9. EXPORTACIÓN E HISTORIAL LOCAL
-
-   - Exporta informes completos de usuarios, visitas, tiempo y tokens en
-     formato CSV.
-
-   - La Página de Informes es la página dedicada de la extensión. Se abre desde
-     el popup o con el botón "↗ Página del informe" de la pestaña Informe del
-     panel. Incluye
-     informes detallados, filtros de modelo y fecha, exportación CSV y
-     herramientas para importar/exportar copias de seguridad y borrar datos.
-     Los informes por período también muestran la evolución diaria de usuarios
-     nuevos y recurrentes cuando se guardaron esos datos. El rey actual de cada
-     día también se registra y aparece en los informes diarios y los resúmenes
-     por período. La sección Shows resume la cantidad y las ganancias estimadas.
-     Los shows con ticket también muestran las entradas vendidas y su precio;
-     los shows con ticket o grupales tienen listas desplegables de participantes
-     cuando se registraron los nombres. Cada usuario aparece una sola vez con
-     la cantidad de veces que entró.
-
-   - Los intervalos de los gráficos se seleccionan automáticamente según la
-     duración registrada:
-     hasta 9 min: 1 min; 10–29 min: 2 min; 30–59 min: 5 min; 1h–1h39: 10 min;
-     1h40–2h59: 20 min; 3h–4h59: 30 min; desde 5h: 1 hora.
-
-   - El período también incluye un mapa de calor por día/hora, una cronología
-     de actividad y moderación, interacción por usuario, eficiencia de la
-     audiencia, contribuciones por liga e historial combinado de metas y
-     shows.
-
-   CÓMO LEER LOS GRÁFICOS DE LOS INFORMES
-
-   - En la Página de Informes hay tres vistas: Día, Live y Período. Elige el
-     modelo/sala y los datos disponibles. En el informe por período, define las
-     fechas y agrupa los resultados por día, semana o mes. También puedes
-     comparar dos períodos.
-
-   - En los informes de Día y Live, el gráfico combinado muestra los tokens
-     por intervalo junto con la evolución de la audiencia y marca los tipos de
-     show registrados. La sección Shows resume la cantidad y las ganancias
-     estimadas, e indica la hora de inicio y fin de cada show. También incluye
-     listas desplegables de participantes en cada show con ticket o show grupal;
-     cada usuario aparece una vez con su cantidad de entradas.
-     Los gráficos de flujo detallan tokens y usuarios listados;
-     elige el tamaño de los bloques o usa Automático para ajustarlo a la duración
-     registrada. Los tokens sin hora se muestran aparte y no se distribuyen
-     artificialmente entre los bloques.
-
-   - Los gráficos e indicadores de audiencia del informe diario muestran la
-     retención, los picos/promedios de usuarios y la distribución por liga.
-     La composición de ganancias agrupa tokens por categoría. Los gráficos de
-     rendimiento comparan la duración y los tokens de las lives del día. Las
-     clasificaciones muestran las mayores propinas individuales, las opciones
-     del menú y los resultados registrados de la ruleta. Cuando hay datos, las
-     tablas también muestran lives, donantes, usuarios sospechosos y usuarios
-     silenciados. El resumen diario también cuenta los shows por tipo: ticket,
-     privado, exclusivo y grupal.
-
-   - El gráfico combinado del informe por Sesión muestra la audiencia y las
-     ganancias de la live en los intervalos seleccionados. También incluye el
-     flujo de tokens y usuarios listados, las ganancias por categoría y una
-     tabla con las principales diferencias cuando se selecciona otra sesión
-     para comparar.
-
-   - En los informes por Período, «Ganancias por fecha/semana/mes» suma los
-     tokens de cada agrupación. «Tokens por hora» reúne los registros de la
-     misma hora en todo el período; «Promedio de tokens por hora» divide ese
-     total por los días activos. Los gráficos de ritmo usan tokens por hora
-     neta de transmisión (tk/h). «Mayor propina» muestra el valor máximo de
-     cada agrupación, no la suma de las propinas.
-
-   - Los gráficos de audiencia incluyen picos y promedios diarios de
-     espectadores, promedios por hora y promedios de usuarios listados y de
-     usuarios con tokens por hora, fecha y día de la semana. Los promedios
-     horarios de audiencia y usuarios se ponderan por las muestras
-     registradas; los promedios por fecha o día de la semana usan los días con
-     datos. El pico de usuarios con tokens por hora es el mayor recuento
-     observado en esa hora, no un promedio.
-
-   - Los gráficos de lives muestran la frecuencia de días activos, la duración
-     bruta y neta, los tokens y el ritmo por live. Los gráficos de usuarios
-     nuevos/recurrentes y donantes muestran su evolución por agrupación; en las
-     series de donantes, una misma persona puede aparecer en varios días. La
-     comparación entre períodos muestra promedios de tokens y, cuando hay
-     datos, de espectadores.
-
-   - El mapa de calor organiza los tokens por día de la semana y hora; la
-     intensidad del color representa los tokens, y el tooltip también muestra
-     eventos y el promedio de espectadores. La cronología separa los eventos
-     de la moderación por hora. Las tablas de interacción, ligas, donantes y
-     rey de la sala complementan los gráficos con métricas individuales o
-     agregadas.
-
-   - Los gráficos de sospechosos y silenciados cuentan usuarios distintos en
-     cada intervalo; no son un recuento acumulado de personas únicas en todo el
-     período. La sospecha de bot es heurística, no una confirmación. Los
-     gráficos pueden aparecer vacíos si no se guardaron registros; los valores
-     ausentes no significan necesariamente que no hubiera actividad.
-
-   - Cada meta o show de la cronología del período se puede borrar de forma
-     individual. La acción pide confirmación, elimina el registro del
-     historial y no recalcula las métricas agregadas. Antes de borrar, hay
-     que pausar el monitoreo de ese modelo.
-
-   - Los informes diarios y por período muestran la conversión de usuarios
-     nuevos y recurrentes en donantes cuando hay datos completos. En los
-     informes por período, los usuarios recurrentes se cuentan por día, así
-     que una misma persona puede aparecer en varios días.
-
-   - Para validar el total del rey, se conserva el valor del sitio hasta que
-     coincida con la suma de las propinas capturadas en el chat; después de
-     confirmarlo, el informe sigue la suma del chat. Si el límite para
-     convertirse en rey aparece antes que el nombre, el sistema identifica
-     quién lo alcanzó. Este historial comienza con esta versión y guarda solo
-     el rey observado más recientemente para cada día.
-
-   - Hay copias de seguridad JSON completas o limitadas a una modelo,
-     disponibles en el panel y en la página de informes, con validación,
-     vista previa, confirmación y un límite de 25 MiB. La restauración
-     selectiva reemplaza los datos de esa modelo y conserva los demás,
-     incluso en el historial compartido. Se siguen reconociendo las copias
-     antiguas como completas; una copia limitada no se puede usar como
-     restauración completa.
-
-   - El historial se guarda en IndexedDB de la extensión, más adecuado para
-     grandes volúmenes de datos que el almacenamiento clave/valor del navegador.
-
-   - El uso de IndexedDB que aparece en la pestaña Historial es una estimación
-     del tamaño de los datos serializados; el espacio real usado por el
-     navegador puede variar.
-
-   - La restauración comprueba todas las pestañas de Stripchat abiertas;
-     pausa el monitoreo antes de importar. Una restauración completa
-     reemplaza los datos locales de SC Monitor, así que exporta una copia
-     actual antes de restaurar otro archivo. Guarda los archivos exportados
-     fuera del navegador para evitar perderlos al desinstalar la extensión.
-
-   - El contexto se aísla automáticamente al navegar entre salas (SPA).
+   - The Events table and summary cards can switch between current-session
+     data and data accumulated for the day.
+
+   - The Session/Day selector updates the event list, consolidated
+     per-item summary, earnings-by-type chart, and user ranking together.
+
+   - All, Tips, Menu, and Goals/Shows filters remain available. Menu limits
+     the list to menu/request events; Goals/Shows includes epic goals, shows,
+     and tickets.
+
+   - Events are separated by local date (Brasilia time), preventing records
+     from a previous day from appearing in today's summary.
+
+
+7. AUTOMATIC MODERATION AND MUTED-USER TRACKING
+
+   - Prohibited keywords can be dynamically registered for each model as tags.
+
+   - The extension can attempt to mute a user through a confirmation dialog
+     and keeps a complete history (PENDING, SUCCESS, or FAILURE).
+
+   - The Moderation tab shows messages from the current day. Reports retain
+     history from other days, including messages sent by muted users. In a
+     period report, muted-user details can be removed only from the selected
+     period without changing aggregate totals.
+
+   - Muted users are robustly detected in chat (.user-muted-message), with
+     the author, moderator, and most recently captured message recorded.
+
+
+8. TIME TRACKING AND FLOATING INTERFACE
+
+   - Independent timers track total elapsed time and net active time.
+
+   - In Monitor Room mode, when the model goes offline, SC Monitor waits at
+     least 2 minutes. Each new real chat message restarts the wait; automatic
+     notifications and updates to existing messages do not. If there are no
+     messages for that long, the live ends; if the model returns afterward, a
+     new live starts.
+
+   - The panel can be dragged by its header or inner bottom bar, which shows
+     the date and logo. Its size can be adjusted from all four corners. The
+     panel can be pinned and offers automatic collection by switching between
+     the chat and users tabs.
+
+   - The extension icon displays the model's avatar while monitoring is active.
+
+
+9. EXPORTS AND LOCAL HISTORY
+
+   - Export complete user, visit, time, and token reports in CSV format.
+
+   - The Reports Page is the extension's dedicated report page. Open it from
+     the popup or with the "↗ Report page" button in the panel's Report tab.
+     It contains
+     detailed reports, model and date filters, CSV export, and backup and data
+     deletion tools. Period reports also show daily changes in new and returning
+     users when that data was saved. The current room king for each day is also
+     recorded and shown in daily and period summaries. The Shows section
+     summarizes show counts and estimated earnings, and shows each show's
+     start and end times. Ticket shows also display tickets sold and their
+     prices, and ticket/group shows have expandable participant lists when
+     names were captured. Each user appears once with their number of entries.
+     Period reports organize shows in collapsible folders by type and then by
+     date, while captured participant lists remain available.
+     Day and Live reports also allow manual entries for private-chat, private
+     show, and exclusive-show earnings, with an optional username. For private
+     and exclusive shows, attach the entry to an existing show or create a new
+     one; values are included in day, live, and period totals.
+     Unsubmitted values are preserved when the report refreshes.
+
+   - Chart intervals are selected automatically based on the recorded
+     duration:
+     up to 9 min: 1 min; 10–29 min: 2 min; 30–59 min: 5 min; 1h–1h39: 10 min;
+     1h40–2h59: 20 min; 3h–4h59: 30 min; 5h or more: 1 hour.
+
+   - Period reports also include a day/hour heatmap, activity and moderation
+     timeline, user engagement, audience efficiency, league contributions,
+     and a combined goals-and-shows history.
+
+   HOW TO READ THE REPORT CHARTS
+
+   - On the Reports Page, choose one of three views: Day, Live, or Period.
+     Select a model/room and the available data. For a period report, set the
+     date range and group results by day, week, or month. You can also compare
+     two periods. Filter selections are retained when the page is reloaded.
+
+   - In Day and Live reports, the combined chart shows tokens per interval
+     alongside audience changes and marks recorded show types. The Shows
+     section summarizes counts and estimated earnings, with expandable lists
+     of participants in each ticket or group show. Flow charts break down
+     tokens and listed users; choose a block size or use Auto to adjust it to
+     the recorded duration. Tokens without a timestamp are shown separately
+     and are not artificially assigned to blocks.
+
+   - The daily report's audience charts and metrics show retention, user
+     peaks/averages, and league distribution. Earnings composition groups
+     tokens by category. Performance charts compare duration and tokens across
+     the day's live sessions. Rankings show top individual tips, menu options,
+     and recorded roulette results. Tables also show sessions, tippers,
+     suspected users, and muted users when data is available. The daily
+     summary also counts shows by type: ticket, private, exclusive, and group.
+
+   - The Session report's combined chart shows audience and earnings over the
+     selected live's intervals. It also includes token and listed-user flow,
+     earnings by category, and a table of key differences when another session
+     is selected for comparison.
+
+   - In Period reports, "Earnings by date/week/month" sums tokens in each
+     grouping. "Tokens by hour" combines records from the same hour across the
+     period; "Average tokens by hour" divides that total by active days. Pace
+     charts use tokens per net live hour (tk/h). "Largest tip" shows the
+     maximum tip in each grouping, not the sum of tips.
+
+   - Audience charts include daily viewer peaks and averages, hourly averages,
+     and averages of listed users and users with tokens by hour, date, and
+     weekday. Hourly audience and user averages are weighted by recorded
+     samples; date and weekday averages use days with data. The hourly peak of
+     users with tokens is the highest count observed in that hour, not an
+     average.
+
+   - Live charts show active-day frequency, gross and net duration, tokens,
+     and pace per live. New/returning-user and tipper charts show changes by
+     grouping; in tipper series, the same person may appear on multiple days.
+     Period comparisons show average tokens and, when available, average
+     viewers.
+
+   - The heatmap organizes tokens by weekday and hour; color intensity
+     represents tokens, and its tooltip also shows events and average viewers.
+     The timeline separates events from moderation by hour. Engagement,
+     league, tipper, and room-king tables complement the charts with
+     individual or aggregate metrics.
+
+   - Suspected-bot and muted-user charts count distinct users in each interval;
+     they are not a cumulative count of unique people across the entire
+     period. A bot suspicion is heuristic, not confirmation. Charts may be
+     empty when no records were saved; missing values do not necessarily mean
+     there was zero activity.
+
+   - Each goal or show in the period timeline can be deleted individually.
+     The action requires confirmation, removes the record from history, and
+     does not recalculate aggregate metrics. Monitoring for that model must
+     be paused before deletion.
+
+   - Daily and period reports show the conversion of new and returning users
+     into tippers when complete data is available. In period reports,
+     returning users are counted by day, so the same person may appear on
+     multiple days.
+
+   - To validate the room-king total, the site value is retained until it
+     matches the sum of tips captured in chat; after confirmation, the report
+     follows the chat total. If the threshold for becoming king appears
+     before the name, the system identifies the person who reached it. This
+     history starts with this version and stores only the most recently
+     observed king for each day.
+
+   - Full or model-specific JSON backups are available in the panel and on
+     the reports page, with validation, preview, confirmation, and a 25 MiB
+     limit. A model-specific restore replaces that model's data and preserves
+     the others, including in shared history. Older backups are still
+     recognized as full backups; a limited backup cannot be used as a full
+     restore.
+
+   - History is stored in the extension's IndexedDB, which is better suited
+     to larger data volumes than the browser's key/value storage.
+
+   - IndexedDB usage shown on the History tab is an estimate of the serialized
+     data size; the actual space used by the browser may differ.
+
+   - Restore checks all open Stripchat tabs; pause monitoring before
+     importing. A full restore replaces SC Monitor's local data, so export a
+     current backup before restoring another file. Keep exported files
+     outside the browser to avoid losing them if the extension is uninstalled.
+
+   - Context is automatically isolated when navigating between rooms (SPA).
 
 
 ------------------------------------------------------------------------
-📖 GUÍA DE LAS PESTAÑAS Y LOS CONTROLES DEL PANEL
+📖 PANEL TABS AND CONTROLS
 ------------------------------------------------------------------------
 
-PESTAÑAS
+TABS
 
-   - 📊 General: muestra la sala y el estado del monitoreo, tokens de la
-     sesión y del día, tiempo total y neto, espectadores y ajustes de tarifas
-     del Fan Club y los shows. Los valores de los shows son estimaciones.
+   - 📊 General: shows the room and monitoring status, session and daily
+     tokens, total and net time, viewers, and Fan Club/show rate settings.
+     Show values are estimates.
 
-   - 👥 Usuarios: presenta las cifras de audiencia, usuarios nuevos y
-     recurrentes, ligas, el gráfico de usuarios listados y la lista de
-     usuarios con tokens, propinas y mensajes. Los filtros permiten ver a
-     todos, los nuevos o los recurrentes. También muestra espectadores
-     sospechosos según criterios heurísticos; esto no confirma que una cuenta
-     sea un bot.
+   - 👥 Users: shows audience counts, new and returning users, leagues, the
+     listed-user chart, and the user list with tokens, tips, and messages.
+     Filters show everyone, new users, or returning users. It also shows
+     suspected viewers according to heuristic criteria; this does not confirm
+     that an account is a bot.
 
-   - 💰 Eventos: reúne los eventos capturados, como propinas, compras de
-     contenido, menú, metas y shows. Los filtros separan todos los eventos,
-     propinas, menú y metas/shows. Incluye las tareas generadas a partir de
-     solicitudes y las metas de la sala; haz clic en una tarea para marcarla
-     como completada.
+   - 💰 Events: brings together captured events such as tips, content
+     purchases, menu items, goals, and shows. Filters separate all events,
+     tips, menu, and goals/shows. It includes to-do items generated from
+     requests and room goals; click a task to mark it complete.
 
-   - 🛡️ Moderación: permite registrar palabras y frases prohibidas y consultar
-     mensajes moderados y usuarios silenciados. La extensión puede intentar
-     silenciar mensajes identificados; consulta el historial para ver el
-     resultado.
+   - 🛡️ Moderation: lets you register prohibited words and phrases and review
+     current-day moderated messages and muted users. Period reports retain
+     historical records and their messages; removing a detail does not change
+     aggregate totals.
 
-   - 🗂️ Historial: muestra las salas/modelos y los datos diarios guardados,
-     con acciones para esos registros. También permite exportar e importar
-     copias de seguridad completas o de una modelo. Pausa el monitoreo en
-     todas las pestañas abiertas antes de restaurar.
+   - 🗂️ History: lists rooms/models and saved daily data, with actions for
+     those records. It also supports full or model-specific backup export and
+     import. Pause monitoring in every open tab before restoring.
 
-   - 📑 Informe: compara datos de la sesión, del día o de un período.
-     Selecciona la sala y las fechas para consultar los gráficos y las
-     métricas; el botón "↗ Página del informe" abre la Página de Informes con
-     los informes detallados. "Copiar resumen" y "CSV" exportan los datos del informe
-     seleccionado.
+   - 📑 Report: compares session, daily, or period data. Select the room and
+     dates to view charts and metrics; the "↗ Report page" button opens the
+     Reports Page with detailed reports. "Copy Summary" and "CSV" export data from the
+     selected report.
 
 
-CONTROLES DEL PANEL
+PANEL CONTROLS
 
-   - Idioma: elige Português (Brasil), Español o English en el encabezado del
-     panel o en la página de informes. La preferencia se aplica a las
-     interfaces abiertas.
+   - Language: choose Português (Brasil), Español, or English in the panel
+     header or on the reports page. The preference is applied to open
+     interfaces.
 
-   - Monitorear / Pausar monitor: inicia o termina manualmente la recolección
-     de la sesión actual. Al pausar, la sesión termina y se guarda; el
-     historial diario no se borra.
+   - Monitor / Pause Monitor: manually starts or ends collection for the
+     current session. Pausing ends and saves the session; it does not delete
+     daily history.
 
-   - Recolección automática: mientras el monitoreo está activo, alterna entre
-     las pestañas de chat y usuarios aproximadamente cada 12 segundos para
-     actualizar los eventos y la lista de usuarios; luego vuelve al chat. No
-     inicia el monitoreo por sí sola.
+   - Automatic Collection: while monitoring is active, switches between the
+     chat and users tabs about every 12 seconds to update events and the user
+     list, then returns to chat. It does not start monitoring on its own.
 
-   - Monitorear sala (OFF ⇄ ON): sigue automáticamente la sala abierta.
-     Inicia la recolección cuando detecta una transmisión en vivo. Cuando la
-     modelo queda desconectada, espera al menos 2 minutos; cada mensaje nuevo
-     en el chat reinicia la espera. Si vuelve antes de que se detenga el
-     monitoreo, continúa la misma transmisión; si vuelve después, empieza otra.
-     Actualizar la página o salir y volver a la sala sigue iniciando una nueva
-     transmisión, como hasta ahora. Al navegar a otra sala, termina la
-     recolección de la sala monitoreada. Desactivar esta opción deshabilita la
-     automatización, pero no pausa un monitoreo que ya esté en curso; usa
-     "Pausar monitor".
+   - Monitor Room (OFF ⇄ ON): automatically follows the open room. Collection
+     starts when a live broadcast is detected. When the model goes offline, it
+     waits at least 2 minutes; each new real chat message restarts the wait,
+     but automatic notifications and updates to existing messages do not. If
+     the model returns before monitoring stops, the same live continues; if it
+     returns afterward, a new live starts. Refreshing the page or leaving and
+     re-entering the room continues to start a new live, as it does today.
+     Navigating to another room ends collection for the monitored room. Turning
+     this option off disables automation but does not pause monitoring already
+     in progress; use "Pause Monitor".
 
-   - Fijar: mantiene el panel abierto al hacer clic fuera de él. Para cerrarlo,
-     usa "Cerrar".
+   - Pin: keeps the panel open when clicking outside it. Use "Close" to close
+     the panel.
 
-   - Mover y cambiar tamaño: arrastra el panel desde el encabezado o la barra
-     inferior. Ajusta el tamaño arrastrando cualquiera de las cuatro esquinas.
+   - Move and resize: drag the panel by its header or bottom bar. Resize it by
+     dragging any of the four corners.
 
-   - Actualizar: solicita una nueva lectura de los datos disponibles en la
-     página. Guardar almacena los datos locales en ese momento. CSV exporta
-     datos en formato de hoja de cálculo; "Limpiar sesión" reinicia los datos
-     de la sesión actual.
+   - Refresh: requests a new read of data available on the page. Save stores
+     local data at that moment. CSV exports spreadsheet data; "Clear Session"
+     resets the current session's data.
 
 
 ------------------------------------------------------------------------
-📂 ESTRUCTURA DEL PROYECTO
+📂 PROJECT STRUCTURE
 ------------------------------------------------------------------------
 
 ```text
 site_monitor/
 
-├── manifest.json            # Configuración de la extensión Chromium Manifest V3 (v5.0)
-├── README.txt               # Documentación oficial del proyecto
-├── README.en.md             # Documentación en inglés
-├── README.es.md             # Documentación en español
-├── reports.html             # Página dedicada a los informes
-├── reports.css              # Estilos de la página de informes
+├── manifest.json            # Chromium Manifest V3 extension configuration (v5.0)
+├── README.txt               # Official project documentation
+├── README.en.md             # English documentation
+├── README.es.md             # Spanish documentation
+├── reports.html             # Dedicated reports page
+├── reports.css              # Reports page styles
 ├── popup/
-│   ├── popup.html           # Popup simplificado de la barra del navegador
-│   ├── popup.css            # Estilos del popup
-│   └── popup.js             # Conecta el popup con la pestaña activa
+│   ├── popup.html           # Simplified browser-toolbar popup
+│   ├── popup.css            # Popup styles
+│   └── popup.js             # Connects the popup to the active tab
 ├── src/
-│   ├── content.js           # Orquestación del monitoreo, sesión y navegación SPA
-│   ├── background.js        # Service worker, IndexedDB, copias e icono por pestaña
+│   ├── content.js           # Monitoring, session, and SPA navigation orchestration
+│   ├── background.js        # Service worker, IndexedDB, backups, and per-tab icon
 │   ├── core/
-│   │   ├── state.js         # Estado global en memoria y métricas
-│   │   ├── persistence.js   # Guardado, consolidación e historial diario
-│   │   ├── configuration.js # Valores iniciales y limpieza de opciones temporales
-│   │   ├── backup.js        # Validación y formato de copias JSON
-│   │   ├── room-king.js     # Concilia el rey actual con valores del sitio y el chat
-│   │   ├── storage.js       # Interfaz de almacenamiento mediante el service worker
-│   │   └── ui-refresh.js    # Actualizaciones de interfaz separadas de los módulos de dominio
+│   │   ├── state.js         # In-memory global state and metrics
+│   │   ├── persistence.js   # Saving, consolidation, and daily history
+│   │   ├── configuration.js # Startup defaults and temporary-option cleanup
+│   │   ├── backup.js        # JSON backup validation and format
+│   │   ├── room-king.js     # Reconciles current king with site and chat values
+│   │   ├── storage.js       # Storage interface through the service worker
+│   │   └── ui-refresh.js    # UI updates decoupled from domain modules
 │   ├── modules/
-│   │   ├── auto-collector.js # Alternancia de pestañas y ciclo de recolección automática
-│   │   ├── events.js        # Lectura de mensajes, propinas, plugins y shows
-│   │   ├── moderation.js    # Motor de comprobación y filtrado por palabras clave
-│   │   └── parsers.js       # Extractores del DOM para metas, rey, usuarios y ligas
+│   │   ├── auto-collector.js # Tab switching and automatic collection cycle
+│   │   ├── events.js        # Reads messages, tips, plugins, and shows
+│   │   ├── moderation.js    # Keyword checking and filtering engine
+│   │   └── parsers.js       # DOM extractors for goals, king, users, and leagues
 │   ├── ui/
-│   │   ├── panel.js         # Navegación, estado y orquestación del panel
-│   │   ├── panel-events-controller.js # Resumen, filtros y eventos de la pestaña Eventos
-│   │   ├── panel-report-controller.js # Estado e integración de la pestaña Informe
-│   │   ├── panel-report-workspace.js # Carga y renderiza informes en el panel
-│   │   ├── panel-report-controls.js # Controles y selectores de la pestaña Informe
-│   │   ├── panel-template.js # Marcado HTML del panel
-│   │   ├── panel-resize.js  # Cálculo del cambio de tamaño desde las cuatro esquinas
-│   │   ├── open-reports.js  # Abre la página dedicada de informes
-│   │   ├── chart-data.js    # Normalización y agregación de series temporales
-│   │   ├── reports-page.js  # Controles y carga de informes
-│   │   ├── reports-view.js  # Renderizado de informes detallados
-│   │   ├── report-charts.js # Gráficos y controles de granularidad del informe
-│   │   ├── report-data.js   # Agregación temporal y métricas de los informes
+│   │   ├── panel.js         # Panel navigation, state, and orchestration
+│   │   ├── panel-events-controller.js # Events tab summaries, filters, and data
+│   │   ├── panel-report-controller.js # Report tab state and integration
+│   │   ├── panel-report-workspace.js # Loads and renders reports in the panel
+│   │   ├── panel-report-controls.js # Report tab controls and selectors
+│   │   ├── panel-template.js # Panel HTML markup
+│   │   ├── panel-resize.js  # Four-corner resize calculations
+│   │   ├── open-reports.js  # Opens the dedicated reports page
+│   │   ├── chart-data.js    # Time-series normalization and aggregation
+│   │   ├── reports-page.js  # Report controls and loading
+│   │   ├── reports-view.js  # Detailed report rendering
+│   │   ├── report-charts.js # Charts and report granularity controls
+│   │   ├── report-data.js   # Time aggregation and report metrics
 │   │   ├── history/
-│   │   │   └── history-table.js # Renderizado de la tabla de historial
+│   │   │   └── history-table.js # History table rendering
 │   │   ├── users/
-│   │   │   └── users-table.js # Renderizado y filtros de la tabla de usuarios
+│   │   │   └── users-table.js # User table rendering and filters
 │   │   ├── todos/
-│   │   │   └── todo-list.js # Renderizado y formato de las tareas
+│   │   │   └── todo-list.js # Task rendering and formatting
 │   │   ├── moderation/
-│   │   │   └── moderation-view.js # Renderizado de las listas de moderación
+│   │   │   └── moderation-view.js # Moderation list rendering
 │   │   ├── dashboard/
-│   │   │   ├── basic-charts.js # Gráficos SVG del panel
-│   │   │   ├── daily-stats.js # Marcadores del resumen diario
-│   │   │   └── event-summary.js # Renderizado del resumen de eventos
+│   │   │   ├── basic-charts.js # Dashboard SVG charts
+│   │   │   ├── daily-stats.js # Daily summary markers
+│   │   │   └── event-summary.js # Event summary rendering
 │   │   └── export/
-│   │       └── csv-export.js # Generación y descarga de informes CSV
+│   │       └── csv-export.js # CSV report generation and download
 │   └── utils/
-│       └── helpers.js       # Utilidades (sanitización de texto y formateadores)
-└── tests/                   # Pruebas de regresión con el runner nativo de Node.js
+│       └── helpers.js       # Utilities (string sanitizers, formatters)
+└── tests/                   # Regression tests using the native Node.js runner
 ```
 
 
-PRUEBAS DE REGRESIÓN
+REGRESSION TESTS
 
-   - Requiere Node.js 18 o posterior. Ejecuta `npm test` en la raíz del
-     proyecto.
-   - Las pruebas usan el runner nativo de Node.js y no agregan dependencias
-     de terceros.
-   - La suite cubre almacenamiento y copias de seguridad, persistencia,
-     informes, captura de eventos, historial del rey y cambio de tamaño del
-     panel.
+   - Requires Node.js 18 or later. Run `npm test` from the project root.
+   - Tests use the native Node.js runner and add no third-party dependencies.
+   - The suite covers storage and backups, persistence, reports, event
+     collection, room-king history, and panel resizing.
 
 
 ------------------------------------------------------------------------
-⚙️ CÓMO INSTALAR / ACTUALIZAR EN GOOGLE CHROME / BRAVE / EDGE
+⚙️ INSTALLING / UPDATING IN GOOGLE CHROME / BRAVE / EDGE
 ------------------------------------------------------------------------
 
-AVISO: La extensión no se ha probado con una cuenta de modelo. Recomendamos
-usar Stripchat con una cuenta normal de espectador.
+NOTICE: The extension has not been tested with a model account. We recommend
+using Stripchat with a regular viewer account.
 
-La extensión se puede usar sin iniciar sesión, pero puede que no lea
-correctamente los eventos de Ticket Show. Sin iniciar sesión, el precio del
-ticket puede aparecer en dólares en lugar de tokens.
+The extension can be used while logged out, but it may not read Ticket Show
+events correctly. When logged out, the ticket price may appear in dollars
+instead of tokens.
 
-Descargar el código desde GitHub:
+Download the source from GitHub:
 
-   Repositorio: `https://github.com/UsuarioGitQualquer/SC-MONITOR`
+   Repository: `https://github.com/UsuarioGitQualquer/SC-MONITOR`
 
    - GitHub CLI:
      `gh repo clone UsuarioGitQualquer/SC-MONITOR`
@@ -486,65 +459,62 @@ Descargar el código desde GitHub:
    - Git:
      `git clone https://github.com/UsuarioGitQualquer/SC-MONITOR.git`
 
-   - Descargar como ZIP desde el navegador:
-     Abre `https://github.com/UsuarioGitQualquer/SC-MONITOR`, selecciona
-     Code > Download ZIP y extrae el archivo.
+   - Download as ZIP in a browser:
+     Open `https://github.com/UsuarioGitQualquer/SC-MONITOR`, choose
+     Code > Download ZIP, and extract the file.
 
-   - Descargar y extraer como ZIP desde PowerShell (rama main):
+   - Download and extract as ZIP from PowerShell (main branch):
      `$repo = "https://github.com/UsuarioGitQualquer/SC-MONITOR"`
      `$zip = "$HOME\Downloads\SC-Monitor.zip"`
      `Invoke-WebRequest -Uri "$repo/archive/refs/heads/main.zip" -OutFile $zip`
      `Expand-Archive -Path $zip -DestinationPath "$HOME\Downloads\SC-Monitor-source"`
 
-   Después de clonar o extraer, selecciona la carpeta raíz del proyecto que
-   contiene `manifest.json` al elegir "Load unpacked" (Cargar descomprimida).
+   After cloning or extracting, select the project root containing
+   `manifest.json` when choosing "Load unpacked".
 
-1. Abre la página de extensiones del navegador:
-   - Chrome o Brave: `chrome://extensions/`
+1. Open the browser's extensions page:
+   - Chrome or Brave: `chrome://extensions/`
    - Edge: `edge://extensions/`
 
-2. Activa "Modo de desarrollador" en la esquina superior derecha.
+2. Turn on "Developer mode" in the upper-right corner.
 
-3. Elige el procedimiento correspondiente:
-   - INSTALACIÓN NUEVA: haz clic en "Load unpacked" (Cargar descomprimida)
-     en la esquina superior izquierda y selecciona la carpeta raíz del
-     proyecto que contiene `manifest.json`.
-   - ACTUALIZACIÓN: busca SC Monitor en la lista de extensiones y haz clic
-     en el icono de recarga (↻) de su tarjeta.
+3. Choose the appropriate procedure:
+   - NEW INSTALLATION: click "Load unpacked" in the upper-left corner and
+     select the project root folder containing `manifest.json`.
+   - UPDATE: find SC Monitor in the extensions list and click the reload
+     icon (↻) on its card.
 
-4. Abre la página de una transmisión de Stripchat y haz clic en el icono 📊
-   de la extensión. Si la extensión se actualizó con la sala ya abierta, al
-   abrir el popup se intentará reconectar el panel automáticamente, sin
-   recargar la página.
+4. Open a Stripchat broadcast page and click the 📊 extension icon. If the
+   extension was updated while the room was already open, opening its popup
+   attempts to reconnect the panel automatically without reloading the page.
 
 
-Permitir el uso en ventanas de incógnito (opcional):
+Allow use in Incognito windows (optional):
 
-   - En la página de extensiones (`chrome://extensions/`), busca la tarjeta
-     de SC Monitor y haz clic en "Detalles".
-   - Desplázate hacia abajo hasta "Permitir en modo incógnito".
-   - Activa la opción para permitir la extensión en páginas de Stripchat
-     abiertas en una ventana de incógnito.
-   - Los informes se abren en una ventana normal para usar los datos
-     compartidos con el resto de la extensión.
+   - On the extensions page (`chrome://extensions/`), find the SC Monitor
+     card and click "Details".
+   - Scroll down to "Allow in incognito".
+   - Turn on the option to allow the extension on Stripchat pages opened in
+     an Incognito window.
+   - Reports open in a regular window to use the data shared with the rest of
+     the extension.
 
 
 ------------------------------------------------------------------------
-🔒 PRIVACIDAD Y SEGURIDAD
+🔒 PRIVACY AND SECURITY
 ------------------------------------------------------------------------
 
-   - Todo el procesamiento de mensajes, el recuento de tokens y la captura
-     de datos se realizan exclusivamente en el navegador (client-side).
+   - All message processing, token counting, and data collection happen
+     strictly in your browser (client-side).
 
-   - El historial se guarda en IndexedDB local de la extensión, con una cuota
-     ampliada mediante `unlimitedStorage`. Los datos permanecen en el
-     navegador; conserva copias externas.
+   - History is stored in the extension's local IndexedDB database, with
+     increased quota through `unlimitedStorage`. Data stays in the browser;
+     keep external backups.
 
-   - No se envía información de la modelo, los espectadores ni el chat a
-     servidores externos.
+   - Model, viewer, and chat information is not sent to external servers.
 
-   - Mientras el monitoreo está activo, el avatar de la modelo se carga desde
-     el CDN de Stripchat para el icono de la pestaña; la imagen no se reenvía
-     a otros servidores.
+   - While monitoring is active, the model's avatar is loaded from
+     Stripchat's CDN for the tab icon; the image is not forwarded to other
+     servers.
 
 ========================================================================

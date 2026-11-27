@@ -80,6 +80,8 @@
   let panelUI;
   let configuration;
   let localization;
+  let offlineMonitor;
+  let chatActivity;
   try {
     [
       core,
@@ -91,6 +93,8 @@
       panelUI,
       configuration,
       localization,
+      offlineMonitor,
+      chatActivity,
     ] = await Promise.all([
       import(chrome.runtime.getURL("src/core/state.js")),
       import(chrome.runtime.getURL("src/core/persistence.js")),
@@ -101,6 +105,8 @@
       import(chrome.runtime.getURL("src/ui/panel.js")),
       import(chrome.runtime.getURL("src/core/configuration.js")),
       import(chrome.runtime.getURL("src/utils/i18n.js")),
+      import(chrome.runtime.getURL("src/core/offline-monitor.js")),
+      import(chrome.runtime.getURL("src/core/chat-activity.js")),
     ]);
     await localization.initializeLocalization();
     localization.watchExtensionUi();
@@ -124,6 +130,7 @@
     localDateKey,
     resetSessionStats,
     ensureDailyBucket,
+    trimCapturedEvents,
     recordMinuteMetric,
     startOrTouchLiveSegment,
     closeLiveSegmentForDay,
@@ -151,9 +158,13 @@
 
   const {
     checkActiveCamTicketPrice,
+    getMessageId,
+    isShowCancellationMessage,
     processMessage,
+    shouldIgnoreSystemMessage,
     hasRecentTicketPurchase,
   } = events;
+  const { getAddedChatMessages, getChatMessageActivityKey } = chatActivity;
   const { createAutoCollectionController } = autoCollector;
   const {
     AUTOMATION_CONFIG_KEYS,
@@ -190,9 +201,9 @@
   let autoMonitorOnLive = false;
   let watchedModelId = null;
   let offlineDebounceTimer = null;
-  const AUTO_STOP_IDLE_MS = 2 * 60 * 1000;
   let offlineSinceAt = 0;
   let lastChatActivityAt = Date.now();
+  const seenChatActivityKeys = new Map();
   let watchInterval = null;
   let lastActionIconActive = null;
   let lastActionIconUrl = "";
@@ -307,6 +318,26 @@
 
   function queueChatMessages(records) {
     const addedMessages = new Set();
+    const activityMessages = getAddedChatMessages(
+      records,
+      (message) =>
+        shouldIgnoreSystemMessage(message) ||
+        Boolean(
+          message.closest?.(
+            '.private-message, .whisper, .im-chat, [class*="private"], [class*="whisper"], .invisible-mode-message',
+          ),
+        ),
+      (message) => {
+        const messageId = getMessageId(message);
+        const activityKey = getChatMessageActivityKey(message);
+        return Boolean(
+          (messageId &&
+            (message.dataset?.scmSeen === messageId ||
+              processedMessageIds.has(messageId))) ||
+            (activityKey && seenChatActivityKeys.has(activityKey)),
+        );
+      },
+    );
     records.forEach((record) => {
       if (record.type === "characterData") {
         getChatMessagesFromNode(record.target).forEach((message) => addedMessages.add(message));
@@ -315,9 +346,20 @@
         getChatMessagesFromNode(node).forEach((message) => addedMessages.add(message));
       });
     });
+    if (activityMessages.length > 0) {
+      lastChatActivityAt = Date.now();
+      activityMessages.forEach((message) => {
+        const activityKey = getChatMessageActivityKey(message);
+        if (!activityKey) return;
+        seenChatActivityKeys.set(activityKey, lastChatActivityAt);
+      });
+      while (seenChatActivityKeys.size > 2000) {
+        const oldestKey = seenChatActivityKeys.keys().next().value;
+        seenChatActivityKeys.delete(oldestKey);
+      }
+    }
     if (addedMessages.size === 0) return;
 
-    lastChatActivityAt = Date.now();
     addedMessages.forEach((message) => pendingChatMessages.add(message));
     if (!getMonitoring() || processTimeout) return;
     processTimeout = setTimeout(() => {
@@ -351,6 +393,24 @@
 
   function processChatMessageSafely(message, options) {
     try {
+      const messageId = getMessageId(message);
+      const alreadyProcessed =
+        processedMessageIds.has(messageId) ||
+        message?.dataset?.scmSeen === messageId;
+      if (isShowCancellationMessage(message) && !alreadyProcessed) {
+        endActiveShow();
+        state.currentTicketPrice = 0;
+        state.currentTicketShowStartedAt = 0;
+        state.currentTicketShowActive = false;
+        Object.values(state.users || {}).forEach((user) => {
+          if (!user || typeof user !== "object") return;
+          user._ticketShowTicketPriceTipAt = 0;
+          user._ticketShowJoinedAt = 0;
+          user._ticketPurchaseAt = 0;
+          user._ticketAdvancePurchasePending = false;
+          user._ticketAdvancePurchasePrice = 0;
+        });
+      }
       processMessage(message, options);
     } catch (error) {
       const messageId =
@@ -364,26 +424,28 @@
   function scheduleOfflineStop() {
     if (offlineDebounceTimer) return;
 
-    const stopAt = Math.max(
-      offlineSinceAt + AUTO_STOP_IDLE_MS,
-      lastChatActivityAt + AUTO_STOP_IDLE_MS,
-    );
+    const now = Date.now();
+    const delay = offlineMonitor.getOfflineStopDelay({
+      now,
+      offlineSinceAt,
+      lastChatActivityAt,
+    });
     offlineDebounceTimer = setTimeout(() => {
       offlineDebounceTimer = null;
       if (!autoMonitorOnLive || !isWatchedRoomActive()) return;
 
-      const liveData = parseLiveStates();
-      if (!isRoomOfflineNow() || liveData.isLiveActive) {
+      if (!isRoomOfflineNow()) {
         roomOfflineState = false;
         offlineSinceAt = 0;
         return;
       }
 
-      const now = Date.now();
-      if (
-        now - offlineSinceAt < AUTO_STOP_IDLE_MS ||
-        now - lastChatActivityAt < AUTO_STOP_IDLE_MS
-      ) {
+      const currentTime = Date.now();
+      if (!offlineMonitor.isOfflineStopDue({
+        now: currentTime,
+        offlineSinceAt,
+        lastChatActivityAt,
+      })) {
         scheduleOfflineStop();
         return;
       }
@@ -396,7 +458,7 @@
       if (getMonitoring()) {
         stopMonitoringSession(true, "a sala foi detectada como offline");
       }
-    }, Math.max(0, stopAt - Date.now()));
+    }, delay);
   }
 
   function clearRuntimeHandles() {
@@ -513,9 +575,14 @@
 
     const offlineNow = isRoomOfflineNow();
     const liveData = parseLiveStates();
-    const isNowOnline = !offlineNow && liveData.isLiveActive;
+    const shouldMonitorRoom =
+      offlineMonitor.isRoomMonitorable({
+        isOffline: offlineNow,
+        isLiveActive: liveData.isLiveActive,
+        isWaiting: liveData.isAguarde,
+      });
 
-    if (isNowOnline) {
+    if (shouldMonitorRoom) {
       if (offlineDebounceTimer) {
         clearTimeout(offlineDebounceTimer);
         offlineDebounceTimer = null;
@@ -531,8 +598,21 @@
       return;
     }
 
-    if (!roomOfflineState && offlineNow) {
-      if (!offlineSinceAt) offlineSinceAt = Date.now();
+    if (offlineNow) {
+      if (!getMonitoring()) {
+        if (offlineDebounceTimer) {
+          clearTimeout(offlineDebounceTimer);
+          offlineDebounceTimer = null;
+        }
+        offlineSinceAt = 0;
+        roomOfflineState = true;
+        return;
+      }
+
+      if (!offlineSinceAt) {
+        offlineSinceAt = Date.now();
+      }
+      roomOfflineState = false;
       scheduleOfflineStop();
       return;
     }
@@ -553,7 +633,7 @@
       state.watchedModelId = watchedModelId;
       const offlineNow = isRoomOfflineNow();
       roomOfflineState = offlineNow && !getMonitoring();
-      offlineSinceAt = offlineNow && getMonitoring() ? Date.now() : 0;
+      offlineSinceAt = 0;
       startWatchdog();
       checkWatchedModelLiveStatus();
     } else {
@@ -677,6 +757,10 @@
       groupShowKind === "ticket" &&
       hasActiveTicketShowTimer(groupElement)
     );
+    state.currentTicketShowActive = isTicketShow;
+    if (isTicketShow && !state.currentTicketShowStartedAt) {
+      state.currentTicketShowStartedAt = Date.now();
+    }
     let isGroupShow = false;
     let groupParticipantsCount = 0;
     let groupRatePrice = 0;
@@ -706,10 +790,7 @@
       (Boolean(privateShowElement && /show particular|show privado|private show/.test(privateText)) ||
         Boolean(p2pElement && /show particular|show privado|private show/.test(p2pText)));
 
-    const isOfflineState =
-      !groupElement &&
-      !p2pElement &&
-      (document.querySelector(".vc-status-offline, .availability-status.offline") !== null || isRoomOfflineNow());
+    const isOfflineState = isRoomOfflineNow();
     const isAguarde =
       !isOfflineState &&
       !groupElement &&
@@ -865,7 +946,15 @@
   }
 
   function registerShowTokenEvent(currentType, ratePrice, groupRate, groupPeople, isInitial = false) {
+    if (isInitial && currentType === "Ticket") {
+      checkActiveCamTicketPrice();
+    }
+
     state.showTokensAccumulated = (state.showTokensAccumulated || 0) + ratePrice;
+    const timestamp = Date.now();
+    if (isInitial && currentType === "Ticket" && !state.currentTicketShowStartedAt) {
+      state.currentTicketShowStartedAt = timestamp;
+    }
 
     const description = isInitial
       ? currentType === "Grupo"
@@ -880,9 +969,9 @@
           : `Show ${currentType} (1 min)`;
 
     const eventItem = {
-      id: `scm-show-${Date.now()}-${Math.random()}`,
-      time: Date.now(),
-      timestamp: Date.now(),
+      id: `scm-show-${timestamp}-${Math.random()}`,
+      time: timestamp,
+      timestamp,
       type: currentType === "Grupo"
         ? "Show em Grupo"
         : currentType === "Ticket"
@@ -893,6 +982,9 @@
       price: `${ratePrice}`,
       item: description,
       showBoundary: isInitial ? "start" : null,
+      ...(isInitial && currentType === "Ticket"
+        ? { ticketPrice: Math.max(0, Number(state.currentTicketPrice) || 0) }
+        : {}),
     };
 
     if (!Array.isArray(state.events)) state.events = [];
@@ -903,12 +995,12 @@
     if (!Array.isArray(todayBucket.capturedEvents)) todayBucket.capturedEvents = [];
     state.capturedEvents = todayBucket.capturedEvents;
     todayBucket.capturedEvents.push(eventItem);
-    if (todayBucket.capturedEvents.length > 500) todayBucket.capturedEvents.shift();
+    trimCapturedEvents(todayBucket.capturedEvents);
     const currentSegment = todayBucket.liveSessions?.[state.sessionId];
     if (currentSegment) {
       if (!Array.isArray(currentSegment.capturedEvents)) currentSegment.capturedEvents = [];
       currentSegment.capturedEvents.push(eventItem);
-      if (currentSegment.capturedEvents.length > 500) currentSegment.capturedEvents.shift();
+      trimCapturedEvents(currentSegment.capturedEvents);
     }
 
     if (ratePrice > 0) {
@@ -940,6 +1032,9 @@
   function registerShowEndMarker(currentType) {
     if (!currentType) return;
     const timestamp = Date.now();
+    if (currentType === "Ticket") {
+      state.currentTicketShowStartedAt = 0;
+    }
     const showName = currentType === "Grupo"
       ? "Show em Grupo"
       : currentType === "Ticket"
@@ -959,14 +1054,14 @@
     const todayBucket = ensureDailyBucket(localDateKey(timestamp));
     if (!Array.isArray(todayBucket.capturedEvents)) todayBucket.capturedEvents = [];
     todayBucket.capturedEvents.push(eventItem);
-    if (todayBucket.capturedEvents.length > 500) todayBucket.capturedEvents.shift();
+    trimCapturedEvents(todayBucket.capturedEvents);
     state.capturedEvents = todayBucket.capturedEvents;
 
     const currentSegment = todayBucket.liveSessions?.[state.sessionId];
     if (currentSegment) {
       if (!Array.isArray(currentSegment.capturedEvents)) currentSegment.capturedEvents = [];
       currentSegment.capturedEvents.push(eventItem);
-      if (currentSegment.capturedEvents.length > 500) currentSegment.capturedEvents.shift();
+      trimCapturedEvents(currentSegment.capturedEvents);
     }
 
     scheduleSave();
@@ -975,6 +1070,11 @@
   function endActiveShow() {
     if (activeShowCategory && state._showInitialCharged) {
       registerShowEndMarker(activeShowCategory);
+    }
+    if (activeShowCategory === "Ticket") {
+      state.currentTicketPrice = 0;
+      state.currentTicketShowStartedAt = 0;
+      state.currentTicketShowActive = false;
     }
     activeShowCategory = null;
     showSecondsCounter = 0;
@@ -1037,13 +1137,18 @@
     }
     trackUserSyncBehavior(getActiveUsersSet(), liveData.isRestrictedShowState);
 
-    totalBruteSeconds += elapsedSeconds;
-    bruteDaySeconds += elapsedSeconds;
+    const timerIncrements = offlineMonitor.getLiveTimerIncrements({
+      elapsedSeconds,
+      isOffline: liveData.isOfflineState,
+      isLiveActive: liveData.isLiveActive,
+    });
+    totalBruteSeconds += timerIncrements.grossSeconds;
+    bruteDaySeconds += timerIncrements.grossSeconds;
     bucket.bruteDaySeconds = bruteDaySeconds;
 
     if (liveData.isLiveActive) {
-      totalNetSeconds += elapsedSeconds;
-      netDaySeconds += elapsedSeconds;
+      totalNetSeconds += timerIncrements.netSeconds;
+      netDaySeconds += timerIncrements.netSeconds;
       bucket.netDaySeconds = netDaySeconds;
       startOrTouchLiveSegment(today, now);
 
@@ -1379,11 +1484,11 @@
 
     parseGoal();
     if (processExistingMessages) {
+      parseLiveStates();
       document
         .querySelectorAll(".messages-v2 .message-base, .message")
         .forEach((message) =>
           processChatMessageSafely(message, {
-            ignoreTicketPriceAnnouncement: true,
             ignoreTicketPurchaseCorrelation: true,
           }),
         );
@@ -1544,6 +1649,7 @@
     totalNetSeconds = 0;
     showSecondsCounter = 0;
     activeShowCategory = null;
+    state.currentTicketShowStartedAt = 0;
     lastTickTime = Date.now();
     state.sessionId = createSessionId();
     resetSessionStats(true);
@@ -1621,6 +1727,8 @@
     if (!saved || typeof saved !== "object") return false;
     Object.assign(state, saved);
     state.currentTicketPrice = 0;
+    state.currentTicketShowStartedAt = 0;
+    state.currentTicketShowActive = false;
 
     if (!Array.isArray(state.dismissedSuspectBots)) state.dismissedSuspectBots = [];
     state.dismissedSuspectBots.forEach((username) => dismissedBots.add(String(username).toLowerCase()));
@@ -1657,7 +1765,7 @@
       const key = event?.id || `${event?.timestamp ?? event?.time}-${event?.item}-${event?.price}`;
       if (!mergedEvents.has(key)) mergedEvents.set(key, event);
     });
-    bucket.capturedEvents = Array.from(mergedEvents.values()).slice(-500);
+    bucket.capturedEvents = trimCapturedEvents(Array.from(mergedEvents.values()));
     state.capturedEvents = bucket.capturedEvents;
     if (bucket.eventSummaryTotals && typeof bucket.eventSummaryTotals === "object") {
       state.eventSummaryTotals = JSON.parse(JSON.stringify(bucket.eventSummaryTotals));
@@ -1889,9 +1997,16 @@
     });
   }
 
-  function resumeMonitoringWhenLiveActive(attemptsRemaining = 30) {
+  function resumeMonitoringWhenMonitorable(attemptsRemaining = 30) {
     if (getMonitoring() || backupRestorePending) return;
-    if (parseLiveStates().isLiveActive) {
+    const liveData = parseLiveStates();
+    if (
+      offlineMonitor.isRoomMonitorable({
+        isOffline: liveData.isOfflineState,
+        isLiveActive: liveData.isLiveActive,
+        isWaiting: liveData.isAguarde,
+      })
+    ) {
       recoveryResumeTimer = null;
       startMonitoringSession();
       return;
@@ -1902,7 +2017,7 @@
     }
     recoveryResumeTimer = setTimeout(() => {
       recoveryResumeTimer = null;
-      resumeMonitoringWhenLiveActive(attemptsRemaining - 1);
+      resumeMonitoringWhenMonitorable(attemptsRemaining - 1);
     }, 1000);
   }
 
@@ -1993,6 +2108,39 @@
           modelId: String(state.modelId || ""),
           monitoring: getMonitoring(),
         });
+        break;
+      case "SCM_MODERATION_LOG_DELETED":
+        if (
+          String(message.modelId || "") !== String(state.modelId || "") ||
+          !String(message.logId || "").trim()
+        ) {
+          sendResponse({ ok: false, ignored: true });
+          break;
+        }
+        state.moderationLogs = (state.moderationLogs || []).filter(
+          (log) => String(log.id || "") !== String(message.logId),
+        );
+        {
+          const dateKey = String(message.dateKey || "");
+          if (/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+            if (!state.dailyBuckets || typeof state.dailyBuckets !== "object") {
+              state.dailyBuckets = {};
+            }
+            const bucket = state.dailyBuckets[dateKey] || {};
+            bucket.moderationLogs = (Array.isArray(bucket.moderationLogs)
+              ? bucket.moderationLogs
+              : []).filter((log) => String(log.id || "") !== String(message.logId));
+            bucket.moderationLogDeletedIds = Array.from(new Set([
+              ...(Array.isArray(bucket.moderationLogDeletedIds)
+                ? bucket.moderationLogDeletedIds
+                : []),
+              String(message.logId),
+            ]));
+            state.dailyBuckets[dateKey] = bucket;
+          }
+        }
+        render();
+        sendResponse({ ok: true });
         break;
       case "SCM_EXPORT":
         downloadCSV();
@@ -2129,7 +2277,7 @@
             }
             const shouldResumeMonitoring = window.__scmRecoveryShouldResume === true;
             window.__scmRecoveryShouldResume = false;
-            if (shouldResumeMonitoring) resumeMonitoringWhenLiveActive();
+            if (shouldResumeMonitoring) resumeMonitoringWhenMonitorable();
             resolve();
           } catch (error) {
             reject(error);

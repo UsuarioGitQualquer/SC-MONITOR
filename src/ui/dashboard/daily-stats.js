@@ -22,6 +22,21 @@ export function buildDailyStatsHtml({
     { value: 30, label: "30m" },
     { value: 60, label: "1h" },
   ];
+  const userMetrics = [
+    ["👥 Listados", userPeak.listedUsersCount, userAverages.listedUsersCount],
+    ["🪙 Com tokens", userPeak.tokensUsersCount, userAverages.tokensUsersCount],
+    ["👑 Ultimate", userPeak.ultimateUsersCount, userAverages.ultimateUsersCount],
+    ["👻 Invisíveis", userPeak.invisibleUsersCount, userAverages.invisibleUsersCount],
+  ];
+  const leagueMetrics = [
+    ["Cinzas", "🔘", leaguePeak.grey, leagueAverages.grey],
+    ["Bronze", "🟠", leaguePeak.bronze, leagueAverages.bronze],
+    ["Prata", "🔵", leaguePeak.silver, leagueAverages.silver],
+    ["Ouro", "🟡", leaguePeak.gold, leagueAverages.gold],
+    ["Diamante", "🟣", leaguePeak.diamond, leagueAverages.diamond],
+    ["Real", "🔴", leaguePeak.royal, leagueAverages.royal],
+    ["Lendária", "⭐", leaguePeak.legend, leagueAverages.legend],
+  ];
 
   return `
     <div style="font-weight: 600; color: #c084fc; margin-bottom: 8px; border-bottom: 1px solid #272952; padding-bottom: 6px; display: flex; justify-content: space-between; align-items: center; font-size: 12px;">
@@ -44,21 +59,52 @@ export function buildDailyStatsHtml({
     </div>
 
     ${waveHtml}
-    <div style="margin-bottom: 10px; line-height: 1.6; font-size: 11px;">
-      <strong>🎖️ Maior Pico (Hoje):</strong> ${peakViewers} espectadores  |  <strong>🧑🏻‍💻 Média:</strong> ${avgViewers}<br>
-      <span style="font-size:10px; color:#8b92b8;">Média calculada pelas amostras coletadas durante o monitoramento.</span><br>
-      <strong>✨ Tokens (gorjetas + shows estimados, hoje):</strong> <span style="color: #00e5ff; font-weight: bold; font-size: 13px;">${tokens} tk</span>
+    <div style="display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; margin:10px 0 14px;">
+      <div style="padding:8px 10px; border-radius:8px; background:rgba(255,255,255,0.035);">
+        <span style="display:block; color:#8b92b8; font-size:10px;">🎖️ Maior pico de hoje</span>
+        <strong style="font-size:12px;">${peakViewers} espectadores</strong>
+      </div>
+      <div style="padding:8px 10px; border-radius:8px; background:rgba(255,255,255,0.035);">
+        <span style="display:block; color:#8b92b8; font-size:10px;">🧑🏻‍💻 Média de espectadores</span>
+        <strong style="font-size:12px;">${avgViewers}</strong>
+      </div>
+      <div style="grid-column:1 / -1; padding:8px 10px; border-radius:8px; background:rgba(0,229,255,0.06);">
+        <span style="display:block; color:#8b92b8; font-size:10px;">✨ Tokens hoje (gorjetas + shows estimados)</span>
+        <strong style="font-size:14px; color:#00e5ff;">${tokens} tk</strong>
+      </div>
+    </div>
+    <div style="margin:-8px 0 12px; color:#8b92b8; font-size:10px;">
+      Média calculada pelas amostras coletadas durante o monitoramento.
     </div>
 
-    <div style="margin-bottom: 10px; border-top: 1px dashed #272952; padding-top: 8px; line-height: 1.6; font-size: 11px;">
-      <strong style="color: #00e5ff;">Usuários (Hoje - Pico / Média):</strong><br>
-      Listados: ${userPeak.listedUsersCount || 0}/${userAverages.listedUsersCount} | Com Tokens: ${userPeak.tokensUsersCount || 0}/${userAverages.tokensUsersCount} | Ultimate: ${userPeak.ultimateUsersCount || 0}/${userAverages.ultimateUsersCount} | Invisíveis: ${userPeak.invisibleUsersCount || 0}/${userAverages.invisibleUsersCount}<br>
-      <strong>Retenção:</strong> 🆕 Novos: ${audience.newUsers} (${audience.newTippers} doadores) | 🔁 Recorrentes: ${audience.returningUsers} (${audience.returningTippers} doadores) | Retorno: <span style="color:#ff2a6d; font-weight:bold;">${returnRate}%</span>
+    <div style="margin-bottom:12px; border-top:1px dashed #272952; padding-top:10px;">
+      <strong style="display:block; color:#00e5ff; font-size:11px; margin-bottom:7px;">Usuários (Hoje · Pico / Média)</strong>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:5px;">
+        ${userMetrics.map(([label, peak, average]) => `
+          <div style="padding:6px 8px; border-radius:6px; background:rgba(255,255,255,0.035);">
+            <span style="display:block; color:#8b92b8; font-size:9px;">${label}</span>
+            <strong style="font-size:10px;">Pico ${Math.round(Number(peak) || 0)} · Média ${Math.round(Number(average) || 0)}</strong>
+          </div>
+        `).join("")}
+      </div>
+      <strong style="display:block; margin:12px 0 8px; font-size:11px;">Retenção</strong>
+      <div style="display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; font-size:10px;">
+        <span style="display:flex; align-items:center; box-sizing:border-box; min-height:44px; padding:9px 10px; border-radius:6px; background:rgba(255,255,255,0.035);">🆕 Novos: ${audience.newUsers} (${audience.newTippers} doadores)</span>
+        <span style="display:flex; align-items:center; box-sizing:border-box; min-height:44px; padding:9px 10px; border-radius:6px; background:rgba(255,255,255,0.035);">🔁 Recorrentes: ${audience.returningUsers} (${audience.returningTippers} doadores)</span>
+        <span style="display:flex; align-items:center; box-sizing:border-box; grid-column:1 / -1; min-height:44px; padding:9px 10px; border-radius:6px; background:rgba(255,42,109,0.07);">Retorno: <strong style="color:#ff2a6d; margin-left:4px;">${returnRate}%</strong></span>
+      </div>
     </div>
 
-    <div style="border-top: 1px dashed #272952; padding-top: 8px; line-height: 1.6; font-size: 11px;">
-      <strong style="color: #ff7b00;">Ligas (Hoje - Pico / Média):</strong><br>
-      🔘${leaguePeak.grey || 0}/${leagueAverages.grey}   🟠${leaguePeak.bronze || 0}/${leagueAverages.bronze}   🔵${leaguePeak.silver || 0}/${leagueAverages.silver}   🟡${leaguePeak.gold || 0}/${leagueAverages.gold}   🟣${leaguePeak.diamond || 0}/${leagueAverages.diamond}   🔴${leaguePeak.royal || 0}/${leagueAverages.royal}   ⭐${leaguePeak.legend || 0}/${leagueAverages.legend}
+    <div style="border-top:1px dashed #272952; padding-top:10px;">
+      <strong style="display:block; color:#ff7b00; font-size:11px; margin-bottom:7px;">Ligas (Hoje · Pico / Média)</strong>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(105px,1fr)); gap:5px;">
+        ${leagueMetrics.map(([label, icon, peak, average]) => `
+          <div style="padding:6px 8px; border-radius:6px; background:rgba(255,255,255,0.035);">
+            <span style="display:block; color:#cbd5e1; font-size:9px;">${icon} ${label}</span>
+            <strong style="font-size:10px;">Pico ${Math.round(Number(peak) || 0)} · Média ${Math.round(Number(average) || 0)}</strong>
+          </div>
+        `).join("")}
+      </div>
     </div>
   `;
 }
